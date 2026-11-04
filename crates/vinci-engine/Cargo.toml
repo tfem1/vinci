@@ -1,0 +1,28 @@
+[package]
+name = "vinci-engine"
+description = "VINCI engine: orchestrates capture, replay buffer, saving, library, hotkeys, game detection and updates — independent of any GUI"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+vinci-hw.workspace = true
+vinci-encoding.workspace = true
+vinci-capture.workspace = true
+vinci-replay.workspace = true
+vinci-clips.workspace = true
+vinci-storage.workspace = true
+vinci-games.workspace = true
+vinci-hotkeys.workspace = true
+vinci-update.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+log.workspace = true
+parking_lot.workspace = true
+crossbeam-channel.workspace = true
+chrono.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

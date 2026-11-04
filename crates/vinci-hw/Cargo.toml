@@ -1,0 +1,25 @@
+[package]
+name = "vinci-hw"
+description = "VINCI hardware & capability detection (GPU, FFmpeg, GStreamer, system stats)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[features]
+default = ["nvml"]
+nvml = ["dep:nvml-wrapper"]
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+log.workspace = true
+sysinfo.workspace = true
+nvml-wrapper = { workspace = true, optional = true }
+
+[target.'cfg(windows)'.dependencies]
+windows.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

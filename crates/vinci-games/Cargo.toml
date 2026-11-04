@@ -1,0 +1,19 @@
+[package]
+name = "vinci-games"
+description = "VINCI game detection: known-games database, store-library heuristics, foreground window"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+log.workspace = true
+sysinfo.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+x11rb.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows.workspace = true

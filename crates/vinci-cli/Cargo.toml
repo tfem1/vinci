@@ -1,0 +1,22 @@
+[package]
+name = "vinci-cli"
+description = "VINCI headless command-line interface (replay buffer without GUI, diagnostics, library tools)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "vinci-cli"
+path = "src/main.rs"
+
+[dependencies]
+vinci-engine.workspace = true
+vinci-capture.workspace = true
+vinci-encoding.workspace = true
+vinci-clips.workspace = true
+vinci-storage.workspace = true
+clap.workspace = true
+serde_json.workspace = true
+crossbeam-channel.workspace = true
+log.workspace = true

@@ -1,0 +1,27 @@
+[package]
+name = "vinci-update"
+description = "VINCI update manager: signed manifests (Ed25519), SHA-256 verified downloads, stable/beta channels"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "vinci-release-sign"
+path = "src/bin/release_sign.rs"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+log.workspace = true
+semver.workspace = true
+sha2.workspace = true
+ed25519-dalek.workspace = true
+getrandom.workspace = true
+base64.workspace = true
+ureq.workspace = true
+vinci-hw.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

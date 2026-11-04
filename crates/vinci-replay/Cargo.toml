@@ -1,0 +1,16 @@
+[package]
+name = "vinci-replay"
+description = "VINCI instant-replay engine: fragmented-MP4 ring buffer (RAM or disk) and zero-re-encode clip export"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+bytes.workspace = true
+thiserror.workspace = true
+log.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

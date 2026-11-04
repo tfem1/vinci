@@ -1,0 +1,10 @@
+/target
+/node_modules
+/dist
+/src-tauri/target
+/src-tauri/gen
+/src-tauri/binaries/*
+!/src-tauri/binaries/.gitkeep
+*.log
+.DS_Store
+/release-artifacts

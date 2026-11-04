@@ -1,0 +1,24 @@
+[package]
+name = "vinci-storage"
+description = "VINCI storage manager: per-OS paths, atomic JSON persistence, disk space, temp cleanup"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+log.workspace = true
+directories.workspace = true
+dirs.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+libc.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

@@ -1,0 +1,20 @@
+[package]
+name = "vinci-clips"
+description = "VINCI clip manager: SQLite library, folder sync, thumbnails, rename/move/delete"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+vinci-storage.workspace = true
+vinci-encoding.workspace = true
+vinci-hw.workspace = true
+rusqlite.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+log.workspace = true
+chrono.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

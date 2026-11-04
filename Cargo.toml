@@ -1,0 +1,87 @@
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+# `cargo test` / `cargo build` at the root only touch the engine crates by default,
+# so the engine can be built and tested on machines without the GUI toolchain.
+default-members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["VINCI contributors"]
+repository = "https://github.com/USERNAME/vinci"
+homepage = "https://github.com/USERNAME/vinci"
+rust-version = "1.82"
+
+[workspace.dependencies]
+vinci-hw = { path = "crates/vinci-hw" }
+vinci-encoding = { path = "crates/vinci-encoding" }
+vinci-capture = { path = "crates/vinci-capture" }
+vinci-replay = { path = "crates/vinci-replay" }
+vinci-clips = { path = "crates/vinci-clips" }
+vinci-storage = { path = "crates/vinci-storage" }
+vinci-games = { path = "crates/vinci-games" }
+vinci-hotkeys = { path = "crates/vinci-hotkeys" }
+vinci-update = { path = "crates/vinci-update" }
+vinci-engine = { path = "crates/vinci-engine" }
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+anyhow = "1"
+log = { version = "0.4", features = ["std"] }
+parking_lot = "0.12"
+crossbeam-channel = "0.5"
+bytes = "1"
+tempfile = "3"
+libc = "0.2"
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std"] }
+directories = "6"
+dirs = "6"
+rusqlite = { version = "0.37", features = ["bundled"] }
+sysinfo = { version = "0.37", default-features = false, features = ["system"] }
+sha2 = "0.10"
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+getrandom = "0.2"
+base64 = "0.22"
+semver = { version = "1", features = ["serde"] }
+ureq = { version = "2", default-features = false, features = ["tls", "json"] }
+regex = { version = "1", default-features = false, features = ["std", "unicode-case", "unicode-perl"] }
+global-hotkey = "0.7"
+x11rb = { version = "0.13", features = ["randr"] }
+nvml-wrapper = "0.11"
+ashpd = { version = "0.11", default-features = false, features = ["tokio"] }
+tokio = { version = "1", features = ["rt", "macros", "time", "sync"] }
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
+clap = { version = "4", features = ["derive"] }
+env_logger = { version = "0.11", default-features = false, features = ["auto-color", "humantime"] }
+windows = { version = "0.61", features = [
+  "Win32_Foundation",
+  "Win32_Graphics_Dxgi",
+  "Win32_Graphics_Dxgi_Common",
+  "Win32_Graphics_Gdi",
+  "Win32_Media_Audio",
+  "Win32_Media_KernelStreaming",
+  "Win32_Media_Multimedia",
+  "Win32_System_Com",
+  "Win32_System_Com_StructuredStorage",
+  "Win32_System_Variant",
+  "Win32_System_Threading",
+  "Win32_System_Performance",
+  "Win32_System_ProcessStatus",
+  "Win32_Storage_FileSystem",
+  "Win32_UI_WindowsAndMessaging",
+  "Win32_UI_Shell",
+  "Win32_Devices_FunctionDiscovery",
+  "Win32_UI_Shell_PropertiesSystem",
+] }
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true
+
+[profile.dev.package."*"]
+opt-level = 1
