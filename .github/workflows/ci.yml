@@ -88,3 +88,53 @@ jobs:
           }
           $issues = Invoke-ScriptAnalyzer -Path installers/windows -Severity Error
           if ($issues) { $issues | Format-Table; exit 1 }
+
+  from-source:
+    # Installation path C ("from source, no release needed") exactly as documented.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-latest]
+    name: Install from source (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev
+      - name: scripts/install-from-source.sh
+        if: runner.os == 'Linux'
+        run: |
+          ./scripts/install-from-source.sh
+          ~/.local/bin/vinci-cli --version
+          test -x ~/.local/bin/vinci
+      - name: Package + install.sh against the result (local mirror)
+        if: runner.os == 'Linux'
+        run: |
+          scripts/package-archive.sh linux-x86_64 dist
+          scripts/test-install-local.sh dist linux-x86_64
+      - name: scripts\install-from-source.ps1
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          powershell -ExecutionPolicy Bypass -File .\scripts\install-from-source.ps1
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          & "$env:LOCALAPPDATA\vinci\vinci-cli.exe" --version
+          if (-not (Test-Path "$env:LOCALAPPDATA\vinci\vinci.exe")) { exit 1 }
+          if (-not (Test-Path "$env:LOCALAPPDATA\vinci\ffmpeg.exe")) { exit 1 }
+          $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+          if ($userPath -notlike "*$env:LOCALAPPDATA\vinci*") { Write-Error "PATH not updated"; exit 1 }
+      - name: install-from-source.ps1 is idempotent (PATH entry not duplicated)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          powershell -ExecutionPolicy Bypass -File .\scripts\install-from-source.ps1
+          $n = ([Environment]::GetEnvironmentVariable('Path', 'User') -split ';' | Where-Object { $_ -like "*\vinci" }).Count
+          if ($n -ne 1) { Write-Error "PATH contains the install dir $n times"; exit 1 }
+

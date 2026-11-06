@@ -9,7 +9,7 @@
 A lightweight instant-replay recorder for gamers — Windows & Linux.
 GPU-encoded replay buffer, one-key clips, no re-encoding, no account, no cloud.
 
-[Install](#install) · [Features](#features) · [Build from source](#build-from-source) · [Troubleshooting](#troubleshooting) · [Français](README.fr.md)
+[Install](#install) · [Features](#features) · [Development](#development) · [Troubleshooting](#troubleshooting) · [Français](README.fr.md)
 
 </div>
 
@@ -17,28 +17,87 @@ GPU-encoded replay buffer, one-key clips, no re-encoding, no account, no cloud.
 
 ## Install
 
-**Linux** (Ubuntu, Debian, Mint, Pop!_OS, Fedora, openSUSE, Arch…):
+Three supported ways — all per-user, no administrator rights:
+
+| | Command | Installs to |
+|---|---|---|
+| **A. Linux** (x86_64, arm64) | `curl -fsSL https://github.com/tfem1/vinci/releases/latest/download/install.sh \| bash` | `~/.local/bin` |
+| **B. Windows 10/11** (x64; ARM64 via emulation) | `irm https://github.com/tfem1/vinci/releases/latest/download/install.ps1 \| iex` | `%LOCALAPPDATA%\vinci` + user `PATH` |
+| **C. From source** (Linux, Windows) | `git clone https://github.com/tfem1/vinci && cd vinci && ./scripts/install-from-source.sh` | same as A / B |
+
+> **A and B install the latest published release.** Until the first release exists these
+> URLs return 404 — the scripts then say so and point you to **C**, which needs no release.
+> Pre-releases (`v…-beta.N` tags) are not served by `/releases/latest/`.
+> macOS is not supported (VINCI has no macOS capture backend).
+
+### A. Linux
 
 ```bash
 curl -fsSL https://github.com/tfem1/vinci/releases/latest/download/install.sh | bash
 ```
 
-**Windows 10 / 11** (PowerShell, no admin rights needed):
+Detects the CPU (x86_64 / arm64), downloads `vinci-linux-<arch>.tar.gz` and `SHA256SUMS`,
+verifies the checksum, installs `vinci` (app) and `vinci-cli` into `~/.local/bin` with an
+applications-menu entry, then reports any missing runtime library (WebKitGTK, FFmpeg…)
+with the exact install command for your distribution. If the release or the archive for
+your machine is missing it stops with a clear message. Nothing needs `sudo`.
+
+To read the script before running it:
+`curl -fsSLO https://github.com/tfem1/vinci/releases/latest/download/install.sh && less install.sh && bash install.sh`.
+Options: `VINCI_VERSION=v0.2.0` (specific release), `VINCI_BIN_DIR=~/bin` (other folder) —
+e.g. `curl -fsSL …/install.sh | VINCI_VERSION=v0.2.0 bash`.
+Uninstall: `rm ~/.local/bin/vinci ~/.local/bin/vinci-cli ~/.local/share/applications/vinci.desktop`.
+
+### B. Windows
 
 ```powershell
 irm https://github.com/tfem1/vinci/releases/latest/download/install.ps1 | iex
 ```
 
-> These commands work as soon as the first release is published (see
-> [docs/RELEASING.md](docs/RELEASING.md)). Once a custom domain is attached to the install
-> site, the short form works too:
-> `curl -fsSL https://<your-domain>/install.sh | bash` and `irm https://<your-domain>/install.ps1 | iex`
-> (for example `vinci.app`, once that domain is configured).
+Detects x64 / ARM64 (ARM64 uses the x64 build under Windows 11 emulation), downloads
+`vinci-windows-x86_64.zip` and `SHA256SUMS`, verifies the checksum, extracts `vinci.exe`,
+`vinci-cli.exe` and the bundled FFmpeg to `%LOCALAPPDATA%\vinci`, adds that folder to your
+**user** `PATH` (only once — re-running never duplicates it), creates a Start-menu shortcut
+and checks for the WebView2 runtime.
 
-Both scripts verify every download (SHA-256, plus an Ed25519 signature of the checksum
-list and Authenticode when configured) before anything runs. Classic installers are on the
-[Releases page](https://github.com/tfem1/vinci/releases): `VINCI-windows-x64-setup.exe`,
-`.msi`, `.deb`, `.rpm`, `.AppImage`. Details: [installers/README.md](installers/README.md).
+* **Proxy:** the system proxy is used with your Windows credentials. If the proxy still
+  refuses (HTTP 407) or github.com is unreachable, the script prints what to configure.
+* **Execution policy:** the `irm … | iex` form is not subject to it. If you saved the file
+  and PowerShell says *"running scripts is disabled on this system"*, run it for that one
+  process only: `powershell -ExecutionPolicy Bypass -File .\install.ps1`. A locked-down
+  PowerShell (Constrained Language mode via AppLocker/WDAC) is detected and explained.
+* To read it first: `irm https://github.com/tfem1/vinci/releases/latest/download/install.ps1 -OutFile install.ps1; notepad install.ps1`.
+* Uninstall: `irm https://github.com/tfem1/vinci/releases/latest/download/uninstall.ps1 | iex` (clips are kept).
+
+### C. From source (works today, no release needed)
+
+Needs Rust (https://rustup.rs), Node.js 20+ and the platform build tools — each script
+checks them first and prints the exact install command for anything missing.
+
+```bash
+# Linux — builds and installs into ~/.local/bin
+git clone https://github.com/tfem1/vinci && cd vinci && ./scripts/install-from-source.sh
+```
+
+```powershell
+# Windows — builds and installs into %LOCALAPPDATA%\vinci (+ user PATH)
+git clone https://github.com/tfem1/vinci; cd vinci; powershell -ExecutionPolicy Bypass -File .\scripts\install-from-source.ps1
+```
+
+The build command alone (output: `target/release/vinci` and `target/release/vinci-cli`):
+
+```bash
+npm ci && npx tauri build --no-bundle && cargo build --release -p vinci-cli
+```
+
+(On Windows run `scripts\fetch-ffmpeg.ps1` first — the app bundles FFmpeg there.) Use
+`npx tauri build`, not a plain `cargo build`: only the Tauri CLI embeds the web UI; a plain
+cargo build produces a development binary that expects the Vite dev server.
+
+### Classic installers
+
+When they build, releases also carry `VINCI-windows-x64-setup.exe`, `.msi`, `.deb`,
+`.rpm` and `.AppImage` on the [Releases page](https://github.com/tfem1/vinci/releases).
 
 Default hotkey: **Alt+F10** saves the last 30 seconds. Clips go to `Videos/VINCI`.
 
@@ -115,10 +174,9 @@ as supervised helper processes. Full design: [docs/ARCHITECTURE.md](docs/ARCHITE
 
 | | Status |
 |---|---|
-| Windows 11, Windows 10 1903+ (x64) | Supported — WGC + DDA, NVENC / AMF / QSV. 1809 works with DDA only. ARM64 runs the x64 build under emulation. |
-| Ubuntu 22.04+, Debian 12+, Mint 21+, Pop!_OS | Supported (`.deb`, X11 and Wayland) |
-| Fedora 39+, openSUSE | Supported (`.rpm`). For H.264/HEVC hardware encoding on Fedora, use RPM Fusion's `ffmpeg` |
-| Arch / Manjaro / EndeavourOS / others | Supported (AppImage, installer handles dependencies) |
+| Windows 11, Windows 10 1903+ (x64) | Supported — WGC + DDA, NVENC / AMF / QSV. 1809 works with DDA only. ARM64 (Windows 11) runs the x64 build under emulation. |
+| Linux x86_64 / arm64 with glibc ≥ 2.35: Ubuntu 22.04+, Debian 12+, Mint 21+, Pop!_OS, Fedora 36+, openSUSE Tumbleweed, Arch | Supported (X11 and Wayland). Needs WebKitGTK 4.1 and FFmpeg from your distribution — `install.sh` tells you if they are missing. On Fedora use RPM Fusion's `ffmpeg` for H.264/HEVC hardware encoding. |
+| macOS | Not supported — VINCI has no macOS capture backend. |
 | GPUs | NVIDIA (GTX 900+; AV1 needs RTX 40), AMD (VCN; AV1 needs RX 7000), Intel (Quick Sync / VA-API; AV1 needs Arc / Core Ultra). Without a GPU encoder VINCI falls back to CPU x264. |
 
 What was verified, and how: [docs/TESTING.md](docs/TESTING.md).
@@ -147,7 +205,9 @@ vinci --minimized          # start in the tray
 GNOME 48+, Hyprland…). On desktops without it, bind `vinci --save-clip` to a key in your
 desktop's keyboard settings.
 
-## Build from source
+## Development
+
+To install from source, use [path C](#c-from-source-works-today-no-release-needed). To work on VINCI:
 
 ```bash
 git clone https://github.com/tfem1/vinci.git
@@ -170,7 +230,8 @@ Install Rust (https://rustup.rs) and Node.js 20+, then:
 ```bash
 npm ci
 npm run tauri dev                  # development (hot reload)
-npm run tauri build                # production: .deb, .rpm, .AppImage in target/release/bundle/
+npx tauri build --no-bundle        # production binary: target/release/vinci
+npm run tauri build                # + .deb, .rpm, .AppImage in target/release/bundle/
 cargo test --workspace             # 70+ tests, incl. real FFmpeg encodes
 scripts/e2e-linux.sh               # end-to-end on a virtual X11 desktop (needs Xvfb, pulseaudio, xdotool)
 cargo run -p vinci-cli -- detect   # headless: hardware & encoder report
@@ -193,6 +254,12 @@ cargo test --workspace
 
 | Problem | Fix |
 |---|---|
+| Installer: "no published release found" (404) | No release has been published yet. Install from source ([path C](#c-from-source-works-today-no-release-needed)). |
+| Installer: "this release does not contain vinci-…" | No build exists for your OS/CPU in that release (builds: Linux x86_64/arm64, Windows x64). Use path C. |
+| `vinci: command not found` after installing | Linux: add `~/.local/bin` to your `PATH` (the installer prints the line). Windows: open a **new** terminal (PATH changes apply to new terminals). |
+| Linux installer: "missing system libraries" | Run the `sudo apt/dnf/pacman …` command it printed (WebKitGTK 4.1, appindicator, FFmpeg, GStreamer). |
+| Windows: "proxy requires authentication (HTTP 407)" / cannot reach github.com | Run the two `[System.Net.WebRequest]::DefaultWebProxy…` lines the installer prints (with your proxy address), then retry — or download the zip from the Releases page. |
+| Windows: "running scripts is disabled on this system" | Use the `irm … \| iex` one-liner, or `powershell -ExecutionPolicy Bypass -File .\install.ps1`. |
 | "Using x264 (CPU) — encoder not available" | Your GPU encoder failed its test encode. Update the GPU driver; on Linux check `/dev/dri/renderD*` access (`sudo usermod -aG render,video $USER`, then re-login) and install the VA-API driver (`intel-media-va-driver`, `mesa-va-drivers`). **Settings → Diagnostics** shows each encoder's error. |
 | Wayland: "Wayland capture needs GStreamer with the PipeWire plugin" | Install `gstreamer1.0-pipewire` (Debian/Ubuntu), `pipewire-gstreamer` (Fedora) or `gst-plugin-pipewire` (Arch), plus `xdg-desktop-portal` for your desktop. |
 | Hotkey does nothing | Another app may own it (shown in **Settings → Hotkeys**) — pick another. On Wayland without the GlobalShortcuts portal, bind `vinci --save-clip` in your desktop settings. |

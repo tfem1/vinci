@@ -9,7 +9,7 @@
 Un enregistreur de replays instantanés léger pour les joueurs, sous Windows et Linux.
 Buffer de replay encodé par le GPU, clip en une touche, aucun réencodage, aucun compte, aucun cloud.
 
-[Installer](#installation) · [Fonctionnalités](#fonctionnalités) · [Compiler](#compiler-depuis-les-sources) · [Dépannage](#dépannage) · [English](README.md)
+[Installer](#installation) · [Fonctionnalités](#fonctionnalités) · [Développement](#développement) · [Dépannage](#dépannage) · [English](README.md)
 
 </div>
 
@@ -17,29 +17,88 @@ Buffer de replay encodé par le GPU, clip en une touche, aucun réencodage, aucu
 
 ## Installation
 
-**Linux** (Ubuntu, Debian, Mint, Pop!_OS, Fedora, openSUSE, Arch…) :
+Trois méthodes prises en charge, toutes par utilisateur, sans droits administrateur :
+
+| | Commande | Installe dans |
+|---|---|---|
+| **A. Linux** (x86_64, arm64) | `curl -fsSL https://github.com/tfem1/vinci/releases/latest/download/install.sh \| bash` | `~/.local/bin` |
+| **B. Windows 10/11** (x64 ; ARM64 via émulation) | `irm https://github.com/tfem1/vinci/releases/latest/download/install.ps1 \| iex` | `%LOCALAPPDATA%\vinci` + `PATH` utilisateur |
+| **C. Depuis les sources** (Linux, Windows) | `git clone https://github.com/tfem1/vinci && cd vinci && ./scripts/install-from-source.sh` | comme A / B |
+
+> **A et B installent la dernière release publiée.** Tant qu'aucune release n'existe, ces
+> URL renvoient 404 : les scripts le disent clairement et renvoient vers **C**, qui n'a pas
+> besoin de release. Les pré-releases (tags `v…-beta.N`) ne sont pas servies par `/releases/latest/`.
+> macOS n'est pas pris en charge (VINCI n'a pas de backend de capture macOS).
+
+### A. Linux
 
 ```bash
 curl -fsSL https://github.com/tfem1/vinci/releases/latest/download/install.sh | bash
 ```
 
-**Windows 10 / 11** (PowerShell, sans droits administrateur) :
+Le script détecte le processeur (x86_64 / arm64) et télécharge `vinci-linux-<arch>.tar.gz`
+ainsi que `SHA256SUMS`. Il vérifie la somme de contrôle, puis installe `vinci` (l'application)
+et `vinci-cli` dans `~/.local/bin`, avec une entrée dans le menu des applications. Il signale
+ensuite les bibliothèques manquantes (WebKitGTK, FFmpeg…) avec la commande exacte pour votre
+distribution. Si la release ou l'archive pour votre machine est absente, il s'arrête avec un
+message clair. Aucun `sudo` n'est nécessaire.
+
+Pour lire le script avant de l'exécuter :
+`curl -fsSLO https://github.com/tfem1/vinci/releases/latest/download/install.sh && less install.sh && bash install.sh`.
+Options : `VINCI_VERSION=v0.2.0` (release précise), `VINCI_BIN_DIR=~/bin` (autre dossier).
+Désinstallation : `rm ~/.local/bin/vinci ~/.local/bin/vinci-cli ~/.local/share/applications/vinci.desktop`.
+
+### B. Windows
 
 ```powershell
 irm https://github.com/tfem1/vinci/releases/latest/download/install.ps1 | iex
 ```
 
-> Ces commandes fonctionnent dès la publication de la première release (voir
-> [docs/RELEASING.md](docs/RELEASING.md)). Une fois un domaine relié au site d'installation,
-> la forme courte fonctionne aussi :
-> `curl -fsSL https://<votre-domaine>/install.sh | bash` et `irm https://<votre-domaine>/install.ps1 | iex`
-> (par exemple `vinci.app`, une fois ce domaine configuré).
+Le script détecte x64 / ARM64 (sur ARM64, il utilise la version x64 en émulation Windows 11)
+et télécharge `vinci-windows-x86_64.zip` ainsi que `SHA256SUMS`. Il vérifie la somme de
+contrôle, extrait `vinci.exe`, `vinci-cli.exe` et le FFmpeg embarqué dans `%LOCALAPPDATA%\vinci`,
+puis ajoute ce dossier au `PATH` **utilisateur** une seule fois (le relancer ne crée pas de
+doublon). Il crée aussi un raccourci dans le menu Démarrer et vérifie la présence du runtime WebView2.
 
-Les deux scripts vérifient chaque téléchargement avant toute exécution : SHA-256, plus,
-lorsqu'ils sont configurés, la signature Ed25519 de la liste des sommes de contrôle et
-Authenticode. Les installateurs classiques sont sur la
-[page Releases](https://github.com/tfem1/vinci/releases) : `VINCI-windows-x64-setup.exe`,
-`.msi`, `.deb`, `.rpm`, `.AppImage`. Détails : [installers/README.md](installers/README.md).
+* **Proxy :** le proxy système est utilisé avec vos identifiants Windows. Si le proxy refuse
+  quand même (HTTP 407) ou si github.com est injoignable, le script affiche quoi configurer.
+* **Stratégie d'exécution :** la forme `irm … | iex` n'y est pas soumise. Si vous avez
+  enregistré le fichier et que PowerShell affiche *« l'exécution de scripts est désactivée
+  sur ce système »*, lancez-le pour ce seul processus : `powershell -ExecutionPolicy Bypass -File .\install.ps1`.
+  Un PowerShell verrouillé (mode Constrained Language via AppLocker/WDAC) est détecté et expliqué.
+* Pour le lire avant : `irm https://github.com/tfem1/vinci/releases/latest/download/install.ps1 -OutFile install.ps1; notepad install.ps1`.
+* Désinstallation : `irm https://github.com/tfem1/vinci/releases/latest/download/uninstall.ps1 | iex` (les clips sont conservés).
+
+### C. Depuis les sources (fonctionne dès aujourd'hui, sans release)
+
+Il faut Rust (https://rustup.rs), Node.js 20+ et les outils de compilation de la plateforme.
+Chaque script les vérifie d'abord et affiche la commande exacte pour installer ce qui manque.
+
+```bash
+# Linux : compile et installe dans ~/.local/bin
+git clone https://github.com/tfem1/vinci && cd vinci && ./scripts/install-from-source.sh
+```
+
+```powershell
+# Windows : compile et installe dans %LOCALAPPDATA%\vinci (+ PATH utilisateur)
+git clone https://github.com/tfem1/vinci; cd vinci; powershell -ExecutionPolicy Bypass -File .\scripts\install-from-source.ps1
+```
+
+La commande de compilation seule (résultat : `target/release/vinci` et `target/release/vinci-cli`) :
+
+```bash
+npm ci && npx tauri build --no-bundle && cargo build --release -p vinci-cli
+```
+
+Sous Windows, lancez d'abord `scripts\fetch-ffmpeg.ps1`, car l'application y embarque FFmpeg.
+Utilisez `npx tauri build` et non un simple `cargo build` : seule la CLI Tauri intègre
+l'interface web dans le binaire. Un `cargo build` seul produit un binaire de développement
+qui attend le serveur Vite.
+
+### Installateurs classiques
+
+Quand ils se compilent, les releases contiennent aussi `VINCI-windows-x64-setup.exe`, `.msi`,
+`.deb`, `.rpm` et `.AppImage`, sur la [page Releases](https://github.com/tfem1/vinci/releases).
 
 Raccourci par défaut : **Alt+F10** sauvegarde les 30 dernières secondes. Les clips vont dans `Vidéos/VINCI`.
 
@@ -117,10 +176,9 @@ GStreamer tournent comme processus auxiliaires supervisés. Conception détaill�
 
 | | État |
 |---|---|
-| Windows 11, Windows 10 1903+ (x64) | Pris en charge : WGC + DDA, NVENC / AMF / QSV. La 1809 fonctionne avec DDA uniquement. Sur ARM64, la version x64 tourne en émulation. |
-| Ubuntu 22.04+, Debian 12+, Mint 21+, Pop!_OS | Pris en charge (`.deb`, X11 et Wayland) |
-| Fedora 39+, openSUSE | Pris en charge (`.rpm`). Pour l'encodage matériel H.264/HEVC sous Fedora, utilisez le `ffmpeg` de RPM Fusion. |
-| Arch / Manjaro / EndeavourOS / autres | Pris en charge (AppImage, l'installateur gère les dépendances) |
+| Windows 11, Windows 10 1903+ (x64) | Pris en charge : WGC + DDA, NVENC / AMF / QSV. La 1809 fonctionne avec DDA uniquement. Sur ARM64 (Windows 11), la version x64 tourne en émulation. |
+| Linux x86_64 / arm64 avec glibc ≥ 2.35 : Ubuntu 22.04+, Debian 12+, Mint 21+, Pop!_OS, Fedora 36+, openSUSE Tumbleweed, Arch | Pris en charge (X11 et Wayland). Demande WebKitGTK 4.1 et FFmpeg de votre distribution ; `install.sh` signale ce qui manque. Sous Fedora, utilisez le `ffmpeg` de RPM Fusion pour l'encodage matériel H.264/HEVC. |
+| macOS | Non pris en charge : VINCI n'a pas de backend de capture macOS. |
 | GPU | NVIDIA (GTX 900+ ; l'AV1 demande une RTX 40), AMD (VCN ; l'AV1 demande une RX 7000), Intel (Quick Sync / VA-API ; l'AV1 demande Arc / Core Ultra). Sans encodeur GPU, VINCI se replie sur x264 en CPU. |
 
 Ce qui a été vérifié, et comment : [docs/TESTING.md](docs/TESTING.md).
@@ -149,7 +207,9 @@ vinci --minimized          # démarre dans la zone de notification
 Plasma, GNOME 48+, Hyprland…). Sur les bureaux qui ne l'ont pas, associez
 `vinci --save-clip` à une touche dans les réglages clavier du bureau.
 
-## Compiler depuis les sources
+## Développement
+
+Pour installer depuis les sources, utilisez la [méthode C](#c-depuis-les-sources-fonctionne-dès-aujourdhui-sans-release). Pour travailler sur VINCI :
 
 ```bash
 git clone https://github.com/tfem1/vinci.git
@@ -172,7 +232,8 @@ Installez Rust (https://rustup.rs) et Node.js 20+, puis :
 ```bash
 npm ci
 npm run tauri dev                  # développement (rechargement à chaud)
-npm run tauri build                # production : .deb, .rpm, .AppImage dans target/release/bundle/
+npx tauri build --no-bundle        # binaire de production : target/release/vinci
+npm run tauri build                # + .deb, .rpm, .AppImage dans target/release/bundle/
 cargo test --workspace             # plus de 70 tests, dont de vrais encodages FFmpeg
 scripts/e2e-linux.sh               # test de bout en bout sur un bureau X11 virtuel (Xvfb, pulseaudio, xdotool)
 cargo run -p vinci-cli -- detect   # sans interface : rapport matériel et encodeurs
@@ -196,6 +257,12 @@ cargo test --workspace
 
 | Problème | Solution |
 |---|---|
+| Installateur : « no published release found » (404) | Aucune release n'a encore été publiée. Installez depuis les sources ([méthode C](#c-depuis-les-sources-fonctionne-dès-aujourdhui-sans-release)). |
+| Installateur : « this release does not contain vinci-… » | La release ne contient pas de build pour votre système ou votre processeur (builds disponibles : Linux x86_64/arm64, Windows x64). Utilisez la méthode C. |
+| `vinci: command not found` après l'installation | Sous Linux, ajoutez `~/.local/bin` à votre `PATH` (l'installateur affiche la ligne à ajouter). Sous Windows, ouvrez un **nouveau** terminal (les changements de PATH ne s'appliquent qu'aux nouveaux terminaux). |
+| Installateur Linux : « missing system libraries » | Lancez la commande `sudo apt/dnf/pacman …` qu'il a affichée (WebKitGTK 4.1, appindicator, FFmpeg, GStreamer). |
+| Windows : « proxy requires authentication (HTTP 407) » / github.com injoignable | Lancez les deux lignes `[System.Net.WebRequest]::DefaultWebProxy…` affichées (avec l'adresse de votre proxy) puis relancez, ou téléchargez le zip depuis la page Releases. |
+| Windows : « l'exécution de scripts est désactivée sur ce système » | Utilisez le one-liner `irm … \| iex`, ou `powershell -ExecutionPolicy Bypass -File .\install.ps1`. |
 | « Using x264 (CPU) — encoder not available » | L'encodeur GPU a échoué à son encodage de test. Mettez à jour le pilote graphique. Sous Linux, vérifiez l'accès à `/dev/dri/renderD*` (`sudo usermod -aG render,video $USER`, puis reconnectez-vous) et installez le pilote VA-API (`intel-media-va-driver`, `mesa-va-drivers`). **Settings → Diagnostics** affiche l'erreur de chaque encodeur. |
 | Wayland : « Wayland capture needs GStreamer with the PipeWire plugin » | Installez `gstreamer1.0-pipewire` (Debian/Ubuntu), `pipewire-gstreamer` (Fedora) ou `gst-plugin-pipewire` (Arch), ainsi que `xdg-desktop-portal` pour votre bureau. |
 | Le raccourci ne fait rien | Une autre application l'utilise peut-être (c'est indiqué dans **Settings → Hotkeys**) : choisissez-en un autre. Sous Wayland sans le portail GlobalShortcuts, associez `vinci --save-clip` dans les réglages du bureau. |

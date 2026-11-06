@@ -32,28 +32,30 @@
 
 ## Cutting a release
 
+The install one-liners use `https://github.com/tfem1/vinci/releases/latest/download/…`,
+which only resolves once a **stable** release exists — publish a tag without suffix first.
+
 * Stable: Actions → **Bump version** → `0.2.0` (or locally `scripts/bump-version.sh 0.2.0`,
-  commit, `git tag v0.2.0 && git push --tags`).
-* Beta: same with `0.3.0-beta.1` — published as a GitHub *pre-release*; users on the beta
-  channel (Settings → Updates, or `install.sh --beta`, `$env:VINCI_CHANNEL="beta"`) get it.
+  commit, `git tag v0.2.0 && git push origin v0.2.0`). For the very first release the
+  version in the repository is already `0.1.0`: `git tag v0.1.0 && git push origin v0.1.0`.
+* Beta: same with `0.3.0-beta.1` — published as a GitHub *pre-release* (not served by
+  `/releases/latest/`); users opt in with Settings → Updates → Beta.
 
-The **Release** workflow then:
+The **Release** workflow (`.github/workflows/release.yml`) then, for linux-x86_64,
+linux-arm64 and windows-x86_64:
 
-1. builds Linux x86_64 + aarch64 (deb, rpm, AppImage with bundled FFmpeg 8.1) and Windows
-   x64 (NSIS per-user setup + MSI, with bundled FFmpeg 8.1);
-2. smoke-tests `install.sh` against the freshly built `.deb` (install, tamper rejection, uninstall);
-3. renames bundles to stable names (`VINCI-linux-x86_64.deb`, `VINCI-windows-x64-setup.exe`, …);
-4. writes `SHA256SUMS`, signs it (`SHA256SUMS.sig`, raw Ed25519) and produces the signed
-   update manifest `vinci-update.json`;
-5. publishes the GitHub release with the installers and `install.sh` / `install.ps1`.
+1. builds `vinci` (`npx tauri build --no-bundle`) and `vinci-cli`;
+2. packages the portable archives `vinci-linux-x86_64.tar.gz`, `vinci-linux-arm64.tar.gz`,
+   `vinci-windows-x86_64.zip` (Windows includes FFmpeg 8.1);
+3. smoke-tests `install.sh` against the Linux archive from a local mirror (install,
+   re-install, tampered archive, missing asset, missing release);
+4. builds the classic installers (deb, rpm, AppImage, NSIS, MSI) — optional, a failure
+   there does not block the release;
+5. publishes the release with the archives, `install.sh`, `install.ps1`, `uninstall.ps1`,
+   `SHA256SUMS` and the classic installers; with the signing secret also
+   `SHA256SUMS.sig` and the signed update manifest `vinci-update.json`.
 
-Because asset names are stable, these URLs always point to the latest stable release:
-
-```
-https://github.com/<owner>/<repo>/releases/latest/download/install.sh
-https://github.com/<owner>/<repo>/releases/latest/download/install.ps1
-https://github.com/<owner>/<repo>/releases/latest/download/VINCI-windows-x64-setup.exe
-```
+macOS is not built: VINCI has no macOS capture backend.
 
 ## Verifying a release by hand
 
