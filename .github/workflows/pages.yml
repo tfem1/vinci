@@ -1,0 +1,48 @@
+name: Install site (GitHub Pages)
+
+# Serves the one-line installers at the root of a GitHub Pages site:
+#   https://<owner>.github.io/<repo>/install.sh   and   /install.ps1
+# Add your custom domain (e.g. vinci.app) in Settings → Pages to get
+#   curl -fsSL https://<your-domain>/install.sh | bash
+#   irm https://<your-domain>/install.ps1 | iex
+on:
+  push:
+    branches: [main]
+    paths: ["installers/**", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assemble site
+        run: |
+          mkdir -p site
+          cp installers/linux/install.sh installers/windows/install.ps1 installers/windows/uninstall.ps1 site/
+          cat > site/index.html <<'HTML'
+          <!doctype html><meta charset="utf-8"><title>VINCI installer</title>
+          <body style="background:#090909;color:#fff;font:15px system-ui;padding:48px">
+          <h1>VINCI — Capture Every Moment</h1>
+          <p>Linux: <code>curl -fsSL https://<span class="h"></span>/install.sh | bash</code></p>
+          <p>Windows (PowerShell): <code>irm https://<span class="h"></span>/install.ps1 | iex</code></p>
+          <script>document.querySelectorAll(".h").forEach(e => e.textContent = location.host + location.pathname.replace(/\/$/, ""))</script>
+          </body>
+          HTML
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: site }
+      - id: deployment
+        uses: actions/deploy-pages@v4

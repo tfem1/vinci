@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: "1"
+
+jobs:
+  frontend:
+    name: Frontend (typecheck, unit tests, build)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npx vite build
+
+  linux:
+    name: Linux (engine + app, end-to-end capture under Xvfb)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: System dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev \
+            build-essential patchelf ffmpeg xvfb x11-utils xdotool pulseaudio pulseaudio-utils dbus-x11 \
+            gstreamer1.0-tools gstreamer1.0-plugins-good gstreamer1.0-pipewire shellcheck
+      - uses: dtolnay/rust-toolchain@stable
+        with: { components: "rustfmt, clippy" }
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci && npx vite build
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Unit + integration tests (real FFmpeg encodes, replay buffer, library)
+        run: cargo test --workspace
+      - name: End-to-end — X11 capture, PulseAudio, global hotkey, instant save
+        run: scripts/e2e-linux.sh
+      - name: Installer lint
+        run: shellcheck -S warning installers/linux/install.sh scripts/*.sh
+
+  windows:
+    name: Windows (engine tests, app build check, installer lint)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci && npx vite build
+      - name: Bundled FFmpeg (sidecar)
+        run: powershell -ExecutionPolicy Bypass -File scripts/fetch-ffmpeg.ps1
+      - name: Tests (engine crates + app)
+        env:
+          VINCI_FFMPEG: ${{ github.workspace }}\src-tauri\binaries\ffmpeg-x86_64-pc-windows-msvc.exe
+        run: cargo test --workspace
+      - name: FFmpeg capabilities (gfxcapture = WGC, ddagrab = DDA)
+        shell: pwsh
+        run: |
+          $ff = "src-tauri\binaries\ffmpeg-x86_64-pc-windows-msvc.exe"
+          & $ff -hide_banner -filters | Select-String -Pattern "gfxcapture|ddagrab|scale_d3d11"
+      - name: PowerShell installers — parse + PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
+          foreach ($f in Get-ChildItem installers/windows/*.ps1, scripts/*.ps1) {
+            $tokens = $null; $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors) { $errors | ForEach-Object { Write-Error "$($f.Name): $_" }; exit 1 }
+          }
+          $issues = Invoke-ScriptAnalyzer -Path installers/windows -Severity Error
+          if ($issues) { $issues | Format-Table; exit 1 }

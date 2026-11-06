@@ -1,0 +1,103 @@
+name: Release
+
+# Push a tag `vX.Y.Z` (stable) or `vX.Y.Z-beta.N` (beta / pre-release).
+# Required for signed updates: secret VINCI_UPDATE_SIGNING_KEY and the matching public
+# key committed in crates/vinci-update/update-public-key.txt (see docs/RELEASING.md).
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to (re)build, e.g. v0.2.0"
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  VINCI_REPO: ${{ github.repository }}
+  TAG: ${{ github.event.inputs.tag || github.ref_name }}
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: linux-x86_64, os: ubuntu-22.04, ffmpeg: linux64 }
+          - { name: linux-aarch64, os: ubuntu-22.04-arm, ffmpeg: linuxarm64 }
+          - { name: windows-x64, os: windows-latest, ffmpeg: win64 }
+    name: Build ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: "${{ env.TAG }}" }
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+
+      - name: Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libayatana-appindicator3-dev \
+            librsvg2-dev libxdo-dev libssl-dev build-essential patchelf rpm file xdg-utils
+
+      - name: Bundled FFmpeg (Windows installer / AppImage)
+        shell: bash
+        run: scripts/fetch-ffmpeg.sh ${{ matrix.ffmpeg }}
+
+      - name: Build deb + rpm (system FFmpeg)
+        if: runner.os == 'Linux'
+        run: npx tauri build --bundles deb rpm
+      - name: Build AppImage (bundles FFmpeg)
+        if: runner.os == 'Linux'
+        run: npx tauri build --bundles appimage --config src-tauri/tauri.appimage.conf.json
+      - name: Build NSIS + MSI
+        if: runner.os == 'Windows'
+        run: npx tauri build --bundles nsis msi
+
+      - name: Smoke test — install.sh against the freshly built .deb
+        if: matrix.name == 'linux-x86_64'
+        run: scripts/test-install-local.sh target/release/bundle
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bundles-${{ matrix.name }}
+          path: |
+            target/release/bundle/deb/*.deb
+            target/release/bundle/rpm/*.rpm
+            target/release/bundle/appimage/*.AppImage
+            target/release/bundle/nsis/*-setup.exe
+            target/release/bundle/msi/*.msi
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub release
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: "${{ env.TAG }}" }
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/download-artifact@v4
+        with: { path: artifacts }
+      - name: Stable names, SHA256SUMS, signature, update manifest
+        env:
+          VINCI_UPDATE_SIGNING_KEY: ${{ secrets.VINCI_UPDATE_SIGNING_KEY }}
+        run: |
+          CHANNEL=stable; case "$TAG" in *-*) CHANNEL=beta ;; esac
+          echo "CHANNEL=$CHANNEL" >> "$GITHUB_ENV"
+          scripts/package-release.sh "${TAG#v}" artifacts release-assets "$CHANNEL"
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          flags=(--title "VINCI ${TAG#v}" --generate-notes --verify-tag)
+          [ "$CHANNEL" = beta ] && flags+=(--prerelease)
+          gh release create "$TAG" "${flags[@]}" release-assets/* || gh release upload "$TAG" release-assets/* --clobber
