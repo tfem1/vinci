@@ -138,8 +138,15 @@ check_wayland_capture() { # check_wayland_capture <family>
 }
 has ffmpeg || warn "FFmpeg is not installed — VINCI needs it to capture:  $build_deps"
 check_wayland_capture "$fam"
+path_hint() { # path_hint <bin_dir> — the command for the user's shell
+  case "$(basename "${SHELL:-bash}")" in
+    fish) printf 'fish_add_path %s' "$1" ;;
+    zsh)  printf "echo 'export PATH=\"%s:\$PATH\"' >> ~/.zshrc" "$1" ;;
+    *)    printf "echo 'export PATH=\"%s:\$PATH\"' >> ~/.bashrc" "$1" ;;
+  esac
+}
 case ":$PATH:" in
   *":$bin_dir:"*) ;;
-  *) warn "$bin_dir is not in your PATH. Add to ~/.bashrc:  export PATH=\"$bin_dir:\$PATH\"" ;;
+  *) warn "$bin_dir is not in your PATH, so 'vinci' and 'vinci-cli' are not found by name yet. Run once, then open a new terminal:  $(path_hint "$bin_dir")" ;;
 esac
 printf '\n  Done. Run: vinci   (or vinci-cli detect)\n\n'
