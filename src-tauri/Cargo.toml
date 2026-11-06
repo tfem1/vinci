@@ -1,0 +1,37 @@
+[package]
+name = "vinci-app"
+description = "VINCI desktop application (Tauri)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lib]
+name = "vinci_app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "vinci"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+vinci-engine.workspace = true
+vinci-capture.workspace = true
+vinci-clips.workspace = true
+vinci-encoding.workspace = true
+vinci-hotkeys.workspace = true
+vinci-storage.workspace = true
+vinci-update.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+log.workspace = true
+parking_lot.workspace = true
+tauri = { version = "2", features = ["tray-icon", "protocol-asset", "image-png"] }
+tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
+tauri-plugin-single-instance = "2"
+tauri-plugin-autostart = "2"
+tauri-plugin-notification = "2"

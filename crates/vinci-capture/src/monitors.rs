@@ -48,6 +48,29 @@ pub fn list_monitors() -> Vec<MonitorInfo> {
     }
 }
 
+/// Can a transparent always-on-top overlay window be shown and positioned?
+/// * Windows: always (DWM composition).
+/// * X11: only when a compositing manager owns `_NET_WM_CM_S<n>` (otherwise the
+///   "transparent" window would be an opaque black box).
+/// * Wayland: no — clients cannot position windows or stay above fullscreen apps.
+pub fn overlay_supported() -> bool {
+    #[cfg(windows)]
+    {
+        true
+    }
+    #[cfg(target_os = "linux")]
+    {
+        if vinci_hw::system::display_server() != vinci_hw::DisplayServer::X11 {
+            return false;
+        }
+        x11_impl::compositor_running().unwrap_or(false)
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
+    {
+        false
+    }
+}
+
 /// Monitor for a requested index (falls back to primary, then first).
 pub fn pick(monitors: &[MonitorInfo], index: u32) -> Option<MonitorInfo> {
     monitors
@@ -64,6 +87,14 @@ mod x11_impl {
     use x11rb::connection::Connection;
     use x11rb::protocol::randr::ConnectionExt as _;
     use x11rb::protocol::xproto::ConnectionExt as _;
+
+    pub fn compositor_running() -> Option<bool> {
+        let (conn, screen_num) = x11rb::connect(None).ok()?;
+        let name = format!("_NET_WM_CM_S{screen_num}");
+        let atom = conn.intern_atom(false, name.as_bytes()).ok()?.reply().ok()?.atom;
+        let owner = conn.get_selection_owner(atom).ok()?.reply().ok()?.owner;
+        Some(owner != x11rb::NONE)
+    }
 
     pub fn list() -> Option<Vec<MonitorInfo>> {
         let (conn, screen_num) = x11rb::connect(None).ok()?;
@@ -137,7 +168,7 @@ mod windows_impl {
                             let primary = GetMonitorInfoW(desc.Monitor, &mut mi).as_bool() && (mi.dwFlags & MONITORINFOF_PRIMARY) != 0;
                             out.push(MonitorInfo {
                                 index: out.len() as u32,
-                                name: format!("Display {} ({})", out.len() + 1, dev.trim_start_matches(r"\\.\")),
+                                name: format!("Display {}", dev.trim_start_matches(r"\\.\").trim_start_matches("DISPLAY")),
                                 x: r.left,
                                 y: r.top,
                                 width: (r.right - r.left).max(0) as u32,

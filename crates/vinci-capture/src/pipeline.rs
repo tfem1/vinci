@@ -273,6 +273,11 @@ pub fn ffmpeg_command(spec: &PipelineSpec, ffmpeg: &FfmpegInfo) -> Result<Ffmpeg
         a.push(m);
     }
     a.extend(plan.encoder_args);
+    if spec.backend == BackendKind::X11 {
+        // x11grab already paces frames; when the machine is overloaded, do not encode
+        // duplicated frames to fake a constant rate (saves CPU exactly when it is scarce).
+        push(&mut a, ["-fps_mode", "passthrough"]);
+    }
     if spec.encoder.id == "libx264" {
         // Measured on 1080p60: default look-ahead/frame threads use ~420 MB; this keeps
         // ~300 MB for +4 % size (`zerolatency` would be 136 MB but files 2.7× larger).

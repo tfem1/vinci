@@ -19,6 +19,7 @@ pub mod settings;
 pub use events::{EngineEvent, EngineStatus, ReplayState};
 pub use hwstate::HwState;
 pub use settings::*;
+pub use vinci_hw::ResourceStats;
 
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use parking_lot::{Mutex, RwLock};
@@ -34,7 +35,7 @@ use vinci_clips::{Clip, ClipQuery, Library, LibraryStats, NewClip, ScanReport};
 use vinci_encoding::{CompressOptions, MediaInfo, QualityProfile, VideoParams};
 use vinci_games::{DetectedGame, GameDetector};
 use vinci_hotkeys::{HotkeyAction, HotkeyService, HotkeyStatus};
-use vinci_hw::{ResourceStats, StatsSampler};
+use vinci_hw::StatsSampler;
 use vinci_replay::{Fmp4Demuxer, Fmp4Event, ReplayBuffer, ReplayConfig, Storage};
 use vinci_storage::AppPaths;
 

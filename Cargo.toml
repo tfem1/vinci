@@ -1,9 +1,9 @@
 [workspace]
 resolver = "2"
-members = ["crates/*"]
+members = ["crates/*", "src-tauri"]
 # `cargo test` / `cargo build` at the root only touch the engine crates by default,
 # so the engine can be built and tested on machines without the GUI toolchain.
-default-members = ["crates/*"]
+default-members = ["crates/*", "src-tauri"]
 
 [workspace.package]
 version = "0.1.0"
