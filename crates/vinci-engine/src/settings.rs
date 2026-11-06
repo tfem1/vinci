@@ -71,7 +71,14 @@ pub struct GeneralSettings {
 
 impl Default for GeneralSettings {
     fn default() -> Self {
-        Self { launch_at_startup: false, start_minimized: false, start_replay_on_launch: true, auto_replay_on_game: false, close_to_tray: true, first_run_done: false }
+        Self {
+            launch_at_startup: false,
+            start_minimized: false,
+            start_replay_on_launch: true,
+            auto_replay_on_game: false,
+            close_to_tray: true,
+            first_run_done: false,
+        }
     }
 }
 
@@ -89,7 +96,13 @@ pub struct EncodingSettings {
 
 impl Default for EncodingSettings {
     fn default() -> Self {
-        Self { codec: CodecChoice::Auto, encoder: None, profile: QualityProfile::Balanced, keyframe_interval_secs: 2.0, allow_software: true }
+        Self {
+            codec: CodecChoice::Auto,
+            encoder: None,
+            profile: QualityProfile::Balanced,
+            keyframe_interval_secs: 2.0,
+            allow_software: true,
+        }
     }
 }
 
@@ -198,7 +211,12 @@ pub struct PerformanceSettings {
 
 impl Default for PerformanceSettings {
     fn default() -> Self {
-        Self { resource_saver: false, stats_interval_ms: 2000, free_ui_when_hidden: true, capture_priority: if cfg!(windows) { Priority::AboveNormal } else { Priority::Normal } }
+        Self {
+            resource_saver: false,
+            stats_interval_ms: 2000,
+            free_ui_when_hidden: true,
+            capture_priority: if cfg!(windows) { Priority::AboveNormal } else { Priority::Normal },
+        }
     }
 }
 

@@ -126,7 +126,13 @@ fn run(engine: &Engine, cmd: Cmd) -> i32 {
             println!("CPU      {} ({} threads), RAM {}", r.system.cpu_name, r.system.cpu_threads, mb(r.system.ram_total_bytes));
             println!("Display  {:?}{}", r.system.display_server, r.system.desktop.as_ref().map(|d| format!(" ({d})")).unwrap_or_default());
             for g in &r.gpus {
-                println!("GPU {}    {} [{}]{}", g.index, g.name, g.driver.clone().unwrap_or_default(), g.render_node.as_ref().map(|n| format!(" {}", n.display())).unwrap_or_default());
+                println!(
+                    "GPU {}    {} [{}]{}",
+                    g.index,
+                    g.name,
+                    g.driver.clone().unwrap_or_default(),
+                    g.render_node.as_ref().map(|n| format!(" {}", n.display())).unwrap_or_default()
+                );
             }
             match &r.ffmpeg {
                 Some(f) => println!(
@@ -149,7 +155,16 @@ fn run(engine: &Engine, cmd: Cmd) -> i32 {
             }
             println!("\nMonitors:");
             for m in engine.monitors() {
-                println!("  #{} {} {}×{} at {},{}{}", m.index, m.name, m.width, m.height, m.x, m.y, if m.primary { " (primary)" } else { "" });
+                println!(
+                    "  #{} {} {}×{} at {},{}{}",
+                    m.index,
+                    m.name,
+                    m.width,
+                    m.height,
+                    m.x,
+                    m.y,
+                    if m.primary { " (primary)" } else { "" }
+                );
             }
             0
         }
@@ -176,7 +191,12 @@ fn run(engine: &Engine, cmd: Cmd) -> i32 {
             if hotkeys {
                 let st = engine.start_hotkeys();
                 for r in &st.registrations {
-                    println!("hotkey {:<14} {:<10} {}", r.id, r.accelerator, if r.ok { "registered".to_string() } else { r.error.clone().unwrap_or_default() });
+                    println!(
+                        "hotkey {:<14} {:<10} {}",
+                        r.id,
+                        r.accelerator,
+                        if r.ok { "registered".to_string() } else { r.error.clone().unwrap_or_default() }
+                    );
                 }
                 if let Some(n) = st.note {
                     println!("note: {n}");
@@ -205,7 +225,14 @@ fn run(engine: &Engine, cmd: Cmd) -> i32 {
                 for ev in events.try_iter() {
                     match ev {
                         EngineEvent::ClipSaved { clip, elapsed_ms, remuxed } => {
-                            println!("SAVED {} ({:.1} s, {}, {} ms{})", clip.path.display(), clip.duration, mb(clip.size), elapsed_ms, if remuxed { "" } else { ", raw fMP4" })
+                            println!(
+                                "SAVED {} ({:.1} s, {}, {} ms{})",
+                                clip.path.display(),
+                                clip.duration,
+                                mb(clip.size),
+                                elapsed_ms,
+                                if remuxed { "" } else { ", raw fMP4" }
+                            )
                         }
                         EngineEvent::ClipFailed { message } => {
                             println!("SAVE FAILED: {message}");
@@ -276,7 +303,16 @@ fn run(engine: &Engine, cmd: Cmd) -> i32 {
                 println!("{}", serde_json::to_string_pretty(&clips).unwrap());
             } else {
                 for c in clips {
-                    println!("{:>5}  {:<40} {:>6.1}s {:>9}  {}x{}  {}", c.id, c.title, c.duration, mb(c.size), c.width, c.height, c.path.display());
+                    println!(
+                        "{:>5}  {:<40} {:>6.1}s {:>9}  {}x{}  {}",
+                        c.id,
+                        c.title,
+                        c.duration,
+                        mb(c.size),
+                        c.width,
+                        c.height,
+                        c.path.display()
+                    );
                 }
             }
             0
@@ -292,10 +328,23 @@ fn run(engine: &Engine, cmd: Cmd) -> i32 {
             };
             let events = engine.subscribe();
             let before = engine.clip(id).map(|c| c.size).unwrap_or(0);
-            let job = engine.start_job(id, JobKind::Compress { options: vinci_encoding::CompressOptions { codec: vinci_encoding::Codec::Hevc, target, max_height: None, max_fps: None }, replace: !keep });
+            let job = engine.start_job(
+                id,
+                JobKind::Compress {
+                    options: vinci_encoding::CompressOptions {
+                        codec: vinci_encoding::Codec::Hevc,
+                        target,
+                        max_height: None,
+                        max_fps: None,
+                    },
+                    replace: !keep,
+                },
+            );
             for ev in events {
                 match ev {
-                    EngineEvent::JobProgress { job_id, progress, .. } if job_id == job => eprint!("\rcompressing… {:>3.0}%", progress * 100.0),
+                    EngineEvent::JobProgress { job_id, progress, .. } if job_id == job => {
+                        eprint!("\rcompressing… {:>3.0}%", progress * 100.0)
+                    }
                     EngineEvent::JobDone { job_id, clip, error, .. } if job_id == job => {
                         eprintln!();
                         return match (clip, error) {

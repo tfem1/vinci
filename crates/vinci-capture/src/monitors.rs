@@ -73,12 +73,7 @@ pub fn overlay_supported() -> bool {
 
 /// Monitor for a requested index (falls back to primary, then first).
 pub fn pick(monitors: &[MonitorInfo], index: u32) -> Option<MonitorInfo> {
-    monitors
-        .iter()
-        .find(|m| m.index == index)
-        .or_else(|| monitors.iter().find(|m| m.primary))
-        .or_else(|| monitors.first())
-        .cloned()
+    monitors.iter().find(|m| m.index == index).or_else(|| monitors.iter().find(|m| m.primary)).or_else(|| monitors.first()).cloned()
 }
 
 #[cfg(target_os = "linux")]

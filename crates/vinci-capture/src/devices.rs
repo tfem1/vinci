@@ -31,7 +31,9 @@ pub fn list_audio_devices() -> Vec<AudioDevice> {
 #[cfg(target_os = "linux")]
 fn pulse_sources() -> Vec<AudioDevice> {
     let Some(pactl) = vinci_hw::process::which("pactl") else { return Vec::new() };
-    let Ok((true, out, _)) = vinci_hw::process::run_capture(vinci_hw::process::command(pactl).args(["list", "short", "sources"])) else { return Vec::new() };
+    let Ok((true, out, _)) = vinci_hw::process::run_capture(vinci_hw::process::command(pactl).args(["list", "short", "sources"])) else {
+        return Vec::new();
+    };
     parse_pactl_short(&out)
 }
 
@@ -44,12 +46,7 @@ pub(crate) fn parse_pactl_short(out: &str) -> Vec<AudioDevice> {
                 return None;
             }
             let input = !name.ends_with(".monitor");
-            let pretty = name
-                .trim_end_matches(".monitor")
-                .rsplit('.')
-                .next()
-                .unwrap_or(&name)
-                .replace(['_', '-'], " ");
+            let pretty = name.trim_end_matches(".monitor").rsplit('.').next().unwrap_or(&name).replace(['_', '-'], " ");
             Some(AudioDevice { name: if input { pretty } else { format!("{pretty} (output)") }, id: name, input })
         })
         .collect()

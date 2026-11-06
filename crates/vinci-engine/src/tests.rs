@@ -72,7 +72,18 @@ fn replay_save_library_and_compress() {
         assert_eq!(e.status().state, ReplayState::Stopped);
 
         // Compress in place to ≤ 1 MB: still one physical file.
-        let job = e.start_job(clip.id, JobKind::Compress { options: CompressOptions { codec: vinci_encoding::Codec::H264, target: vinci_encoding::CompressTarget::SizeMb(1.0), max_height: None, max_fps: None }, replace: true });
+        let job = e.start_job(
+            clip.id,
+            JobKind::Compress {
+                options: CompressOptions {
+                    codec: vinci_encoding::Codec::H264,
+                    target: vinci_encoding::CompressTarget::SizeMb(1.0),
+                    max_height: None,
+                    max_fps: None,
+                },
+                replace: true,
+            },
+        );
         let mut done = None;
         assert!(wait_for(
             || {

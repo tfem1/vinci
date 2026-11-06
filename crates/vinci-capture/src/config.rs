@@ -120,7 +120,14 @@ pub struct CaptureConfig {
 
 impl Default for CaptureConfig {
     fn default() -> Self {
-        Self { backend: BackendKind::Auto, target: CaptureTarget::default(), resolution: Resolution::Native, fps: 60, cursor: true, audio: AudioConfig::default() }
+        Self {
+            backend: BackendKind::Auto,
+            target: CaptureTarget::default(),
+            resolution: Resolution::Native,
+            fps: 60,
+            cursor: true,
+            audio: AudioConfig::default(),
+        }
     }
 }
 

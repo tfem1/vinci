@@ -111,7 +111,12 @@ impl CaptureSession {
         }
     }
 
-    fn start_ffmpeg(spec: &PipelineSpec, ffmpeg: &FfmpegInfo, tail: Arc<Mutex<VecDeque<String>>>, info: SessionInfo) -> Result<Self, CaptureError> {
+    fn start_ffmpeg(
+        spec: &PipelineSpec,
+        ffmpeg: &FfmpegInfo,
+        tail: Arc<Mutex<VecDeque<String>>>,
+        info: SessionInfo,
+    ) -> Result<Self, CaptureError> {
         let cmdline = ffmpeg_command(spec, ffmpeg)?;
         log::info!("capture: {} {}", ffmpeg.path.display(), cmdline.args.join(" "));
         let mut cmd = vinci_hw::process::command(&ffmpeg.path);
@@ -147,7 +152,13 @@ impl CaptureSession {
     }
 
     #[allow(unused_variables, unused_mut)]
-    fn start_portal(spec: &PipelineSpec, ffmpeg: &FfmpegInfo, gst: Option<&GstInfo>, tail: Arc<Mutex<VecDeque<String>>>, mut info: SessionInfo) -> Result<Self, CaptureError> {
+    fn start_portal(
+        spec: &PipelineSpec,
+        ffmpeg: &FfmpegInfo,
+        gst: Option<&GstInfo>,
+        tail: Arc<Mutex<VecDeque<String>>>,
+        mut info: SessionInfo,
+    ) -> Result<Self, CaptureError> {
         #[cfg(target_os = "linux")]
         {
             use std::os::fd::AsRawFd;
@@ -186,7 +197,10 @@ impl CaptureSession {
             spawn_stderr_reader("gstreamer", &mut gchild, tail.clone());
             let gout = gchild.stdout.take().ok_or_else(|| CaptureError::Spawn("gst stdout".into()))?;
             let mut f = vinci_hw::process::command(&ffmpeg.path);
-            f.args(remux_mkv_to_fmp4_args(spec.frag_ms, actual_codec == vinci_encoding::Codec::Hevc)).stdin(Stdio::from(gout)).stdout(Stdio::piped()).stderr(Stdio::piped());
+            f.args(remux_mkv_to_fmp4_args(spec.frag_ms, actual_codec == vinci_encoding::Codec::Hevc))
+                .stdin(Stdio::from(gout))
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped());
             let mut fchild = match f.spawn() {
                 Ok(c) => c,
                 Err(e) => {
@@ -198,7 +212,13 @@ impl CaptureSession {
             let stdout = fchild.stdout.take();
             info.width = spec.out_size.0;
             info.height = spec.out_size.1;
-            Ok(Self { children: vec![("gstreamer".into(), gchild), ("ffmpeg-remux".into(), fchild)], stdout, stderr_tail: tail, _portal: Some(portal), info })
+            Ok(Self {
+                children: vec![("gstreamer".into(), gchild), ("ffmpeg-remux".into(), fchild)],
+                stdout,
+                stderr_tail: tail,
+                _portal: Some(portal),
+                info,
+            })
         }
         #[cfg(not(target_os = "linux"))]
         {

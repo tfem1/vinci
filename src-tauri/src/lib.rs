@@ -67,7 +67,11 @@ pub fn show_main(app: &AppHandle) {
             let cfg = app.config().app.windows.iter().find(|w| w.label == "main").cloned();
             let built = match cfg {
                 Some(c) => WebviewWindowBuilder::from_config(app, &c).and_then(|b| b.build()),
-                None => WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into())).title("VINCI").inner_size(1280.0, 820.0).decorations(false).build(),
+                None => WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
+                    .title("VINCI")
+                    .inner_size(1280.0, 820.0)
+                    .decorations(false)
+                    .build(),
             };
             match built {
                 Ok(w) => {
@@ -171,7 +175,9 @@ fn forward_events(app: &AppHandle) {
             let mut last_state = ReplayState::Stopped;
             for ev in rx {
                 match &ev {
-                    EngineEvent::ClipSaved { clip, .. } => overlay::show(&app, overlay::Msg::Saved { title: clip.title.clone(), seconds: clip.duration }),
+                    EngineEvent::ClipSaved { clip, .. } => {
+                        overlay::show(&app, overlay::Msg::Saved { title: clip.title.clone(), seconds: clip.duration })
+                    }
                     EngineEvent::ClipFailed { message } => overlay::show(&app, overlay::Msg::Error { title: message.clone() }),
                     EngineEvent::Status(st) if st.state != last_state => {
                         last_state = st.state;
@@ -321,7 +327,9 @@ pub fn run() {
 
     app.run(|app, ev| match ev {
         // Last window closed/destroyed: keep running in the tray.
-        RunEvent::ExitRequested { code: None, api, .. } if app.state::<AppState>().engine.settings().general.close_to_tray => api.prevent_exit(),
+        RunEvent::ExitRequested { code: None, api, .. } if app.state::<AppState>().engine.settings().general.close_to_tray => {
+            api.prevent_exit()
+        }
         RunEvent::Exit => app.state::<AppState>().engine.shutdown(),
         _ => {}
     });

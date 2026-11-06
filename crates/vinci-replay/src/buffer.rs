@@ -8,7 +8,7 @@
 //!   `max_bytes` (RAM mode) or by the ring capacity (disk mode).
 
 use crate::mp4::InitInfo;
-use crate::ring::{RingAlloc, RingFile};
+use crate::ring::{Placement, RingAlloc, RingFile};
 use crate::stream::Fragment;
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
@@ -154,9 +154,9 @@ impl ReplayBuffer {
             let off = loop {
                 let placed = self.ring.as_ref().unwrap().1.place(len);
                 match placed {
-                    Err(()) => return Err(io::Error::other(format!("fragment of {len} bytes larger than the disk ring"))),
-                    Ok(Some(off)) => break off,
-                    Ok(None) => {
+                    Placement::TooLarge => return Err(io::Error::other(format!("fragment of {len} bytes larger than the disk ring"))),
+                    Placement::At(off) => break off,
+                    Placement::Full => {
                         if !self.evict_gop() {
                             return Err(io::Error::other("disk ring cannot make room"));
                         }

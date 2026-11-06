@@ -128,10 +128,13 @@ mod tests {
         assert_eq!(ev_b.len(), 9);
         let keys: Vec<bool> = ev_a.iter().filter_map(|e| if let Fmp4Event::Fragment(f) = e { Some(f.keyframe) } else { None }).collect();
         assert_eq!(keys, vec![true, false, false, false, true, false, false, false]);
-        let total: usize = ev_b.iter().map(|e| match e {
-            Fmp4Event::Init { data, .. } => data.len(),
-            Fmp4Event::Fragment(f) => f.data.len(),
-        }).sum();
+        let total: usize = ev_b
+            .iter()
+            .map(|e| match e {
+                Fmp4Event::Init { data, .. } => data.len(),
+                Fmp4Event::Fragment(f) => f.data.len(),
+            })
+            .sum();
         assert_eq!(total, stream.len(), "every byte accounted for");
         assert_eq!(a.buffered(), 0);
     }

@@ -28,8 +28,5 @@ pub fn default_hw_context(gpus: &[vinci_hw::GpuInfo]) -> HwContext {
         GpuVendor::Intel => 1,
         _ => 2,
     });
-    HwContext {
-        vaapi_device: ranked.first().and_then(|g| g.render_node.clone()),
-        d3d11_adapter: gpus.first().map(|g| g.index),
-    }
+    HwContext { vaapi_device: ranked.first().and_then(|g| g.render_node.clone()), d3d11_adapter: gpus.first().map(|g| g.index) }
 }

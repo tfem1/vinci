@@ -92,12 +92,17 @@ pub fn keygen() -> (String, String) {
 }
 
 fn signing_key(secret_b64: &str) -> Result<SigningKey, UpdateError> {
-    let seed: [u8; 32] = B64.decode(secret_b64.trim()).ok().and_then(|v| v.try_into().ok()).ok_or_else(|| UpdateError::Manifest("bad signing key".into()))?;
+    let seed: [u8; 32] = B64
+        .decode(secret_b64.trim())
+        .ok()
+        .and_then(|v| v.try_into().ok())
+        .ok_or_else(|| UpdateError::Manifest("bad signing key".into()))?;
     Ok(SigningKey::from_bytes(&seed))
 }
 
 fn verifying_key(public_b64: &str) -> Result<VerifyingKey, UpdateError> {
-    let bytes: [u8; 32] = B64.decode(public_b64.trim()).ok().and_then(|v| v.try_into().ok()).ok_or_else(|| UpdateError::Manifest("bad public key".into()))?;
+    let bytes: [u8; 32] =
+        B64.decode(public_b64.trim()).ok().and_then(|v| v.try_into().ok()).ok_or_else(|| UpdateError::Manifest("bad public key".into()))?;
     VerifyingKey::from_bytes(&bytes).map_err(|_| UpdateError::Manifest("bad public key".into()))
 }
 
@@ -166,7 +171,11 @@ pub struct AvailableUpdate {
 
 /// Is `candidate` newer than `current` for this channel?
 pub fn is_newer(candidate: &str, current: &str, channel: Channel) -> bool {
-    let (Ok(c), Ok(cur)) = (semver::Version::parse(candidate.trim_start_matches('v')), semver::Version::parse(current.trim_start_matches('v'))) else { return false };
+    let (Ok(c), Ok(cur)) =
+        (semver::Version::parse(candidate.trim_start_matches('v')), semver::Version::parse(current.trim_start_matches('v')))
+    else {
+        return false;
+    };
     if channel == Channel::Stable && !c.pre.is_empty() {
         return false;
     }
@@ -204,11 +213,21 @@ impl Updater {
             return Err(UpdateError::InsecureUrl(url.to_string()));
         }
         let local = url.contains("://127.0.0.1") || url.contains("://localhost");
-        Ok(ureq::AgentBuilder::new().timeout_connect(std::time::Duration::from_secs(10)).timeout_read(std::time::Duration::from_secs(60)).try_proxy_from_env(!local).user_agent(&self.user_agent).build())
+        Ok(ureq::AgentBuilder::new()
+            .timeout_connect(std::time::Duration::from_secs(10))
+            .timeout_read(std::time::Duration::from_secs(60))
+            .try_proxy_from_env(!local)
+            .user_agent(&self.user_agent)
+            .build())
     }
 
     fn get_json(&self, url: &str) -> Result<serde_json::Value, UpdateError> {
-        let resp = self.agent(url)?.get(url).set("Accept", "application/vnd.github+json").call().map_err(|e| UpdateError::Network(e.to_string()))?;
+        let resp = self
+            .agent(url)?
+            .get(url)
+            .set("Accept", "application/vnd.github+json")
+            .call()
+            .map_err(|e| UpdateError::Network(e.to_string()))?;
         resp.into_json().map_err(|e| UpdateError::Network(e.to_string()))
     }
 
@@ -221,7 +240,9 @@ impl Updater {
             Channel::Stable => self.get_json(&format!("{api}/releases/latest"))?,
             Channel::Beta => {
                 let list = self.get_json(&format!("{api}/releases?per_page=15"))?;
-                list.as_array().and_then(|a| a.iter().find(|r| !r["draft"].as_bool().unwrap_or(false)).cloned()).ok_or_else(|| UpdateError::Manifest("no release published".into()))?
+                list.as_array()
+                    .and_then(|a| a.iter().find(|r| !r["draft"].as_bool().unwrap_or(false)).cloned())
+                    .ok_or_else(|| UpdateError::Manifest("no release published".into()))?
             }
         };
         release["assets"]
@@ -333,25 +354,23 @@ mod tests {
     }
 
     /// Minimal HTTP server serving fixed files, for end-to-end update tests.
-    fn serve(files: Vec<(String, Vec<u8>)>) -> String {
-        let l = TcpListener::bind("127.0.0.1:0").unwrap();
-        let addr = l.local_addr().unwrap();
+    fn serve(l: TcpListener, files: Vec<(String, Vec<u8>)>) {
         std::thread::spawn(move || {
-            for stream in l.incoming().flatten() {
-                let mut s = stream;
+            for mut s in l.incoming().flatten() {
                 let mut buf = [0u8; 2048];
                 let n = s.read(&mut buf).unwrap_or(0);
                 let req = String::from_utf8_lossy(&buf[..n]);
                 let path = req.split_whitespace().nth(1).unwrap_or("/").to_string();
-                let body = files.iter().find(|(p, _)| *p == path).map(|(_, b)| b.clone());
-                let resp = match body {
-                    Some(b) => [format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", b.len()).into_bytes(), b].concat(),
+                let resp = match files.iter().find(|(p, _)| *p == path) {
+                    Some((_, b)) => {
+                        [format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", b.len()).into_bytes(), b.clone()]
+                            .concat()
+                    }
                     None => b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_vec(),
                 };
                 let _ = s.write_all(&resp);
             }
         });
-        format!("http://{addr}")
     }
 
     #[test]
@@ -359,35 +378,20 @@ mod tests {
         let (sk, pk) = keygen();
         let payload = b"pretend installer".to_vec();
         let sha = hex(&Sha256::digest(&payload));
-        let base_holder = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
-        // Build manifest after we know the port: serve twice (first to get the port).
-        let tmp_base = serve(vec![]);
-        let _ = tmp_base;
-        let base = {
-            let l = TcpListener::bind("127.0.0.1:0").unwrap();
-            let port = l.local_addr().unwrap().port();
-            drop(l);
-            format!("http://127.0.0.1:{port}")
-        };
-        *base_holder.lock().unwrap() = base.clone();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
         let m = manifest("9.0.0", &format!("{base}/pkg.bin"), &sha, payload.len() as u64);
         let signed = serde_json::to_vec(&sign_manifest(&m, &sk).unwrap()).unwrap();
         let bad_sha = manifest("9.0.0", &format!("{base}/pkg.bin"), &"0".repeat(64), payload.len() as u64);
         let bad_signed = serde_json::to_vec(&sign_manifest(&bad_sha, &sk).unwrap()).unwrap();
-        let port: u16 = base.rsplit(':').next().unwrap().parse().unwrap();
-        let l = TcpListener::bind(("127.0.0.1", port)).unwrap();
-        let files = vec![("/vinci-update.json".to_string(), signed), ("/bad.json".to_string(), bad_signed), ("/pkg.bin".to_string(), payload.clone())];
-        std::thread::spawn(move || {
-            for stream in l.incoming().flatten() {
-                let mut s = stream;
-                let mut buf = [0u8; 2048];
-                let n = s.read(&mut buf).unwrap_or(0);
-                let req = String::from_utf8_lossy(&buf[..n]);
-                let path = req.split_whitespace().nth(1).unwrap_or("/").to_string();
-                let body = files.iter().find(|(p, _)| *p == path).map(|(_, b)| b.clone()).unwrap_or_default();
-                let _ = s.write_all(&[format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len()).into_bytes(), body].concat());
-            }
-        });
+        serve(
+            listener,
+            vec![
+                ("/vinci-update.json".to_string(), signed),
+                ("/bad.json".to_string(), bad_signed),
+                ("/pkg.bin".to_string(), payload.clone()),
+            ],
+        );
 
         let mut up = Updater::new("USERNAME/vinci", "0.1.0", Channel::Stable);
         up.public_key = Some(pk.clone());

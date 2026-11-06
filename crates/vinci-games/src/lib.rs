@@ -49,17 +49,63 @@ pub fn builtin_database() -> Vec<GameEntry> {
 
 /// Executables that live inside game folders but are never the game itself.
 const NOT_GAMES: &[&str] = &[
-    "unitycrashhandler64.exe", "unitycrashhandler32.exe", "crashreportclient.exe", "crashpad_handler.exe",
-    "easyanticheat.exe", "easyanticheat_eos_setup.exe", "beservice.exe", "battleye.exe", "vc_redist.x64.exe",
-    "vc_redist.x86.exe", "dxsetup.exe", "dotnetfx.exe", "steamwebhelper.exe", "steam.exe", "steamservice.exe",
-    "epicgameslauncher.exe", "epicwebhelper.exe", "riotclientservices.exe", "riotclientux.exe", "riotclientcrashhandler.exe",
-    "battle.net.exe", "agent.exe", "galaxyclient.exe", "ubisoftconnect.exe", "upc.exe", "eadesktop.exe", "origin.exe",
-    "uninstall.exe", "unins000.exe", "launcher.exe", "redprelauncher.exe", "start_protected_game.exe", "steamerrorreporter.exe",
-    "steamerrorreporter64.exe", "reaper", "pressure-vessel-wrap", "wineserver", "wine64-preloader", "wine-preloader",
-    "srt-bwrap", "proton", "pv-adverb", "python3", "bash", "sh",
+    "unitycrashhandler64.exe",
+    "unitycrashhandler32.exe",
+    "crashreportclient.exe",
+    "crashpad_handler.exe",
+    "easyanticheat.exe",
+    "easyanticheat_eos_setup.exe",
+    "beservice.exe",
+    "battleye.exe",
+    "vc_redist.x64.exe",
+    "vc_redist.x86.exe",
+    "dxsetup.exe",
+    "dotnetfx.exe",
+    "steamwebhelper.exe",
+    "steam.exe",
+    "steamservice.exe",
+    "epicgameslauncher.exe",
+    "epicwebhelper.exe",
+    "riotclientservices.exe",
+    "riotclientux.exe",
+    "riotclientcrashhandler.exe",
+    "battle.net.exe",
+    "agent.exe",
+    "galaxyclient.exe",
+    "ubisoftconnect.exe",
+    "upc.exe",
+    "eadesktop.exe",
+    "origin.exe",
+    "uninstall.exe",
+    "unins000.exe",
+    "launcher.exe",
+    "redprelauncher.exe",
+    "start_protected_game.exe",
+    "steamerrorreporter.exe",
+    "steamerrorreporter64.exe",
+    "reaper",
+    "pressure-vessel-wrap",
+    "wineserver",
+    "wine64-preloader",
+    "wine-preloader",
+    "srt-bwrap",
+    "proton",
+    "pv-adverb",
+    "python3",
+    "bash",
+    "sh",
 ];
 
-const STORE_MARKERS: &[&str] = &["steamapps/common/", "epic games/", "riot games/", "gog galaxy/games/", "xboxgames/", "ubisoft game launcher/games/", "ea games/", "heroic/"];
+const STORE_MARKERS: &[&str] = &[
+    "steamapps/common/",
+    "epic games/",
+    "riot games/",
+    "gog galaxy/games/",
+    "xboxgames/",
+    "ubisoft game launcher/games/",
+    "ea games/",
+    "heroic/",
+];
 
 fn file_name_lower(s: &str) -> String {
     s.rsplit(['/', '\\']).next().unwrap_or(s).trim_matches('"').to_lowercase()
@@ -193,7 +239,10 @@ impl GameDetector {
                 let cand = DetectedGame { name, exe, pid: p.pid, foreground, source };
                 let better = match &best {
                     None => true,
-                    Some(b) => (cand.foreground && !b.foreground) || (cand.foreground == b.foreground && source_rank(cand.source) < source_rank(b.source)),
+                    Some(b) => {
+                        (cand.foreground && !b.foreground)
+                            || (cand.foreground == b.foreground && source_rank(cand.source) < source_rank(b.source))
+                    }
                 };
                 if better {
                     best = Some(cand);
@@ -278,7 +327,12 @@ mod tests {
         let valo = p(10, "VALORANT-Win64-", r"C:\Riot Games\VALORANT\live\ShooterGame\Binaries\Win64\VALORANT-Win64-Shipping.exe", &[]);
         assert_eq!(d.classify(&valo).unwrap().0, "Valorant");
         // Proton: process is wine-preloader, game exe is in argv.
-        let proton = p(11, "wine64-preloader", "/usr/bin/wine64-preloader", &[r"Z:\home\me\.steam\steam\steamapps\common\Elden Ring\Game\eldenring.exe"]);
+        let proton = p(
+            11,
+            "wine64-preloader",
+            "/usr/bin/wine64-preloader",
+            &[r"Z:\home\me\.steam\steam\steamapps\common\Elden Ring\Game\eldenring.exe"],
+        );
         assert_eq!(d.classify(&proton).unwrap().0, "Elden Ring");
         // Unknown game in a Steam library → folder name.
         let indie = p(12, "MyIndie", "/home/me/.local/share/Steam/steamapps/common/Cool Indie Game/bin/game", &[]);
@@ -287,7 +341,9 @@ mod tests {
         let proton_unknown = p(14, "wine64-preloader", "/usr/bin/wine64-preloader", &[r"Z:\games\steamapps\common\Some Game\Some.exe"]);
         assert_eq!(d.classify(&proton_unknown).unwrap().0, "Some Game");
         // Helpers inside game folders are ignored.
-        assert!(d.classify(&p(13, "UnityCrashHandler64.exe", r"D:\SteamLibrary\steamapps\common\X\UnityCrashHandler64.exe", &[])).is_none());
+        assert!(d
+            .classify(&p(13, "UnityCrashHandler64.exe", r"D:\SteamLibrary\steamapps\common\X\UnityCrashHandler64.exe", &[]))
+            .is_none());
         assert!(d.classify(&p(1, "firefox", "/usr/lib/firefox/firefox", &[])).is_none());
         // Java game via command line.
         assert_eq!(d.classify(&p(2, "java", "/usr/bin/java", &["java", "-cp", "net.minecraft.client.main.Main"])).unwrap().0, "Minecraft");

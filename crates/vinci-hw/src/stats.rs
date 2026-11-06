@@ -47,7 +47,9 @@ impl Default for StatsSampler {
 impl StatsSampler {
     pub fn new() -> Self {
         let sys = System::new_with_specifics(
-            RefreshKind::nothing().with_cpu(CpuRefreshKind::nothing().with_cpu_usage()).with_memory(MemoryRefreshKind::nothing().with_ram()),
+            RefreshKind::nothing()
+                .with_cpu(CpuRefreshKind::nothing().with_cpu_usage())
+                .with_memory(MemoryRefreshKind::nothing().with_ram()),
         );
         let threads = sys.cpus().len().max(1) as f32;
         Self { sys, own: Pid::from_u32(std::process::id()), tracked: Vec::new(), threads, gpu: GpuMonitor::new() }
@@ -63,11 +65,7 @@ impl StatsSampler {
         self.sys.refresh_memory_specifics(MemoryRefreshKind::nothing().with_ram());
         let mut pids = vec![self.own];
         pids.extend(self.tracked.iter().copied());
-        self.sys.refresh_processes_specifics(
-            ProcessesToUpdate::Some(&pids),
-            true,
-            ProcessRefreshKind::nothing().with_cpu().with_memory(),
-        );
+        self.sys.refresh_processes_specifics(ProcessesToUpdate::Some(&pids), true, ProcessRefreshKind::nothing().with_cpu().with_memory());
         let (mut cpu, mut ram) = (0.0f32, 0u64);
         for pid in &pids {
             if let Some(p) = self.sys.process(*pid) {
@@ -119,7 +117,11 @@ impl GpuMonitor {
             let have_nvml = nvml.is_some();
             #[cfg(not(feature = "nvml"))]
             let have_nvml = false;
-            if have_nvml { None } else { pdh::PdhGpu::new() }
+            if have_nvml {
+                None
+            } else {
+                pdh::PdhGpu::new()
+            }
         };
         Self {
             #[cfg(feature = "nvml")]

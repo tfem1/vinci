@@ -43,10 +43,22 @@ impl PortalSession {
                         let session = proxy.create_session().await.map_err(|e| e.to_string())?;
                         let cursor_mode = if cursor { CursorMode::Embedded } else { CursorMode::Hidden };
                         proxy
-                            .select_sources(&session, cursor_mode, SourceType::Monitor | SourceType::Window, false, restore_token.as_deref(), PersistMode::ExplicitlyRevoked)
+                            .select_sources(
+                                &session,
+                                cursor_mode,
+                                SourceType::Monitor | SourceType::Window,
+                                false,
+                                restore_token.as_deref(),
+                                PersistMode::ExplicitlyRevoked,
+                            )
                             .await
                             .map_err(|e| e.to_string())?;
-                        let response = proxy.start(&session, None).await.map_err(|e| e.to_string())?.response().map_err(|e| format!("screen sharing was not allowed ({e})"))?;
+                        let response = proxy
+                            .start(&session, None)
+                            .await
+                            .map_err(|e| e.to_string())?
+                            .response()
+                            .map_err(|e| format!("screen sharing was not allowed ({e})"))?;
                         let stream = response.streams().first().ok_or("the portal returned no stream")?.clone();
                         let token = response.restore_token().map(String::from);
                         let fd = proxy.open_pipe_wire_remote(&session).await.map_err(|e| e.to_string())?;
@@ -67,7 +79,9 @@ impl PortalSession {
             .map_err(|e| CaptureError::Portal(e.to_string()))?;
         // The user may need time to answer the dialog the first time.
         match rx.recv_timeout(Duration::from_secs(120)) {
-            Ok(Ok((fd, node_id, size, token))) => Ok(Self { fd, node_id, size, restore_token: token, stop: Some(stop_tx), thread: Some(thread) }),
+            Ok(Ok((fd, node_id, size, token))) => {
+                Ok(Self { fd, node_id, size, restore_token: token, stop: Some(stop_tx), thread: Some(thread) })
+            }
             Ok(Err(e)) => Err(CaptureError::Portal(e)),
             Err(_) => Err(CaptureError::Portal("timed out waiting for the screen-sharing dialog".into())),
         }

@@ -100,7 +100,11 @@ pub fn summarize_error(stderr: &str) -> String {
         .iter()
         .find(|l| {
             let l = l.to_lowercase();
-            l.contains("cannot load") || l.contains("no capable devices") || l.contains("driver") || l.contains("not supported") || l.contains("failed")
+            l.contains("cannot load")
+                || l.contains("no capable devices")
+                || l.contains("driver")
+                || l.contains("not supported")
+                || l.contains("failed")
         })
         .or(lines.first());
     interesting.map(|s| s.chars().take(240).collect()).unwrap_or_else(|| "encoder failed".into())
@@ -136,7 +140,12 @@ pub fn probe_all(ffmpeg: &FfmpegInfo, hw: &HwContext) -> Vec<ProbeResult> {
 ///   (AV1 → HEVC → H.264);
 /// * CPU fallback always prefers **x264**: real-time x265/SVT-AV1 at 1080p60 costs
 ///   several cores, which would hurt the game far more than the bitrate savings help.
-pub fn select(probes: &[ProbeResult], codec: Codec, preferred_id: Option<&str>, allow_software: bool) -> Option<(&'static EncoderInfo, bool)> {
+pub fn select(
+    probes: &[ProbeResult],
+    codec: Codec,
+    preferred_id: Option<&str>,
+    allow_software: bool,
+) -> Option<(&'static EncoderInfo, bool)> {
     let ok = |id: &str| probes.iter().any(|p| p.id == id && p.ok);
     if let Some(id) = preferred_id {
         if ok(id) {

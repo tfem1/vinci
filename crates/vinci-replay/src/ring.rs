@@ -116,6 +116,17 @@ impl Drop for RingFile {
     }
 }
 
+/// Result of [`RingAlloc::place`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Placement {
+    /// Write the record at this offset.
+    At(u64),
+    /// The oldest records must be released first.
+    Full,
+    /// The record is larger than the whole ring.
+    TooLarge,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Region {
     pub seq: u64,
@@ -139,30 +150,29 @@ impl RingAlloc {
         self.regions.iter().map(|r| r.len).sum()
     }
 
-    /// Where a record of `payload` bytes would go, or `None` if the oldest records must
-    /// be released first. `Err` if it can never fit.
-    pub fn place(&self, payload: u64) -> Result<Option<u64>, ()> {
+    /// Where a record of `payload` bytes would go.
+    pub fn place(&self, payload: u64) -> Placement {
         let rec = payload + HEADER;
         if rec > self.capacity {
-            return Err(());
+            return Placement::TooLarge;
         }
-        let (Some(first), Some(last)) = (self.regions.front(), self.regions.back()) else { return Ok(Some(0)) };
+        let (Some(first), Some(last)) = (self.regions.front(), self.regions.back()) else { return Placement::At(0) };
         let tail = first.off;
         let head = last.off + last.len;
         let wrapped = last.off < first.off;
-        Ok(if !wrapped {
+        if !wrapped {
             if head + rec <= self.capacity {
-                Some(head)
+                Placement::At(head)
             } else if rec <= tail {
-                Some(0)
+                Placement::At(0)
             } else {
-                None
+                Placement::Full
             }
         } else if head + rec <= tail {
-            Some(head)
+            Placement::At(head)
         } else {
-            None
-        })
+            Placement::Full
+        }
     }
 
     pub fn commit(&mut self, seq: u64, off: u64, payload: u64) {
@@ -191,10 +201,10 @@ mod tests {
     #[test]
     fn placement_wraps_and_respects_tail() {
         let mut a = RingAlloc::new(1000);
-        assert_eq!(a.place(2000), Err(()));
+        assert_eq!(a.place(2000), Placement::TooLarge);
         let mut seq = 0;
         let mut put = |a: &mut RingAlloc, n: u64| -> Option<u64> {
-            let off = a.place(n).unwrap()?;
+            let Placement::At(off) = a.place(n) else { return None };
             seq += 1;
             a.commit(seq, off, n);
             Some(off)

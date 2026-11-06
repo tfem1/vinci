@@ -18,7 +18,9 @@ use std::str::FromStr;
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum HotkeyAction {
     /// Save the last `secs` seconds (`None` = configured default length).
-    SaveClip { secs: Option<u32> },
+    SaveClip {
+        secs: Option<u32>,
+    },
     ToggleReplay,
 }
 
@@ -267,7 +269,9 @@ impl HotkeyService {
         let (cmd_tx, cmd_rx) = unbounded::<Cmd>();
         let (ev_tx, ev_rx) = unbounded::<HotkeyAction>();
         let (st_tx, st_rx) = unbounded::<HotkeyStatus>();
-        let use_portal = cfg!(target_os = "linux") && std::env::var_os("WAYLAND_DISPLAY").is_some() && std::env::var_os("VINCI_FORCE_X11_HOTKEYS").is_none();
+        let use_portal = cfg!(target_os = "linux")
+            && std::env::var_os("WAYLAND_DISPLAY").is_some()
+            && std::env::var_os("VINCI_FORCE_X11_HOTKEYS").is_none();
         let thread = std::thread::Builder::new()
             .name("vinci-hotkeys".into())
             .spawn(move || {
@@ -317,7 +321,12 @@ mod native {
     use std::collections::HashMap;
     use std::time::Duration;
 
-    fn register(mgr: &GlobalHotKeyManager, bindings: &[Binding], current: &mut Vec<HotKey>, map: &mut HashMap<u32, HotkeyAction>) -> Vec<Registration> {
+    fn register(
+        mgr: &GlobalHotKeyManager,
+        bindings: &[Binding],
+        current: &mut Vec<HotKey>,
+        map: &mut HashMap<u32, HotkeyAction>,
+    ) -> Vec<Registration> {
         for hk in current.drain(..) {
             let _ = mgr.unregister(hk);
         }
@@ -351,7 +360,8 @@ mod native {
                 while let Ok(c) = cmd.recv() {
                     match c {
                         Cmd::Rebind(_, tx) => {
-                            let _ = tx.send(HotkeyStatus { backend: "unavailable".into(), registrations: vec![], note: Some(e.to_string()) });
+                            let _ =
+                                tx.send(HotkeyStatus { backend: "unavailable".into(), registrations: vec![], note: Some(e.to_string()) });
                         }
                         Cmd::Stop => return,
                     }
@@ -508,7 +518,12 @@ mod tests {
 
     #[test]
     fn conflict_detection() {
-        let b = |id: &str, acc: &str| Binding { id: id.into(), accelerator: acc.into(), action: HotkeyAction::ToggleReplay, description: String::new() };
+        let b = |id: &str, acc: &str| Binding {
+            id: id.into(),
+            accelerator: acc.into(),
+            action: HotkeyAction::ToggleReplay,
+            description: String::new(),
+        };
         let c = conflicts(&[b("a", "Alt+F10"), b("b", "alt + f10"), b("c", "Alt+F9")]);
         assert_eq!(c, vec![("a".to_string(), "b".to_string())]);
     }

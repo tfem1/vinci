@@ -103,7 +103,12 @@ impl AudioPump {
         }
     }
 
-    unsafe fn run(mut sink: ChildStdin, cfg: &AudioConfig, stop: &AtomicBool, ready: &std::sync::mpsc::Sender<Result<(), String>>) -> windows::core::Result<()> {
+    unsafe fn run(
+        mut sink: ChildStdin,
+        cfg: &AudioConfig,
+        stop: &AtomicBool,
+        ready: &std::sync::mpsc::Sender<Result<(), String>>,
+    ) -> windows::core::Result<()> {
         CoInitializeEx(None, COINIT_MULTITHREADED).ok()?;
         let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
         let mut sources: Vec<Source> = Vec::new();

@@ -133,9 +133,7 @@ pub fn inspect(path: &Path, source: FfmpegSource) -> Result<FfmpegInfo, HwError>
     let (version, release) = parse_version(&out);
     let lavfi = parse_lib_version(&out, "libavfilter").unwrap_or((0, 0, 0));
 
-    let list = |flag: &str| -> String {
-        run_capture(command(path).args(["-hide_banner", flag])).map(|(_, o, _)| o).unwrap_or_default()
-    };
+    let list = |flag: &str| -> String { run_capture(command(path).args(["-hide_banner", flag])).map(|(_, o, _)| o).unwrap_or_default() };
     let encoders = parse_encoders(&list("-encoders"));
     let filters = parse_filters(&list("-filters"));
     let input_devices = parse_devices(&list("-devices"));
@@ -143,11 +141,7 @@ pub fn inspect(path: &Path, source: FfmpegSource) -> Result<FfmpegInfo, HwError>
         return Err(broken("`ffmpeg -encoders` returned nothing".into()));
     }
 
-    let ffprobe = path
-        .parent()
-        .map(|d| d.join(PROBE_EXE))
-        .filter(|p| is_executable(p))
-        .or_else(|| which("ffprobe"));
+    let ffprobe = path.parent().map(|d| d.join(PROBE_EXE)).filter(|p| is_executable(p)).or_else(|| which("ffprobe"));
 
     Ok(FfmpegInfo { path: path.to_path_buf(), ffprobe, source, version, release, lavfi, encoders, filters, input_devices })
 }
@@ -266,7 +260,8 @@ mod tests {
         let dev = "Devices:\n D. = Demuxing supported\n ---\n D  x11grab  X11\n DE alsa  ALSA\n  E sdl,sdl2 SDL\n";
         let d = parse_devices(dev);
         assert!(d.contains("x11grab") && d.contains("alsa") && !d.contains("sdl"));
-        let dev61 = "Devices:\n D. = Demuxing supported\n .E = Muxing supported\n --\n DE alsa  ALSA\n D  lavfi  Libavfilter\n D  x11grab X11\n";
+        let dev61 =
+            "Devices:\n D. = Demuxing supported\n .E = Muxing supported\n --\n DE alsa  ALSA\n D  lavfi  Libavfilter\n D  x11grab X11\n";
         let d = parse_devices(dev61);
         assert!(d.contains("lavfi") && d.contains("x11grab"), "FFmpeg 6.1 separator");
     }

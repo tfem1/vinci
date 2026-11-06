@@ -62,8 +62,16 @@ pub fn parse_ffprobe_json(json: &str) -> Option<MediaInfo> {
     let video = streams.iter().find(|s| s.get("codec_type").and_then(|t| t.as_str()) == Some("video"))?;
     let audio = streams.iter().find(|s| s.get("codec_type").and_then(|t| t.as_str()) == Some("audio"));
     let fmt = v.get("format");
-    let num = |val: Option<&serde_json::Value>| -> Option<f64> { val.and_then(|x| x.as_str().and_then(|s| s.parse().ok()).or_else(|| x.as_f64())) };
-    let fps = video.get("avg_frame_rate").and_then(|r| r.as_str()).and_then(parse_ratio).filter(|f| *f > 0.0).or_else(|| video.get("r_frame_rate").and_then(|r| r.as_str()).and_then(parse_ratio)).unwrap_or(0.0);
+    let num = |val: Option<&serde_json::Value>| -> Option<f64> {
+        val.and_then(|x| x.as_str().and_then(|s| s.parse().ok()).or_else(|| x.as_f64()))
+    };
+    let fps = video
+        .get("avg_frame_rate")
+        .and_then(|r| r.as_str())
+        .and_then(parse_ratio)
+        .filter(|f| *f > 0.0)
+        .or_else(|| video.get("r_frame_rate").and_then(|r| r.as_str()).and_then(parse_ratio))
+        .unwrap_or(0.0);
     let duration = num(fmt.and_then(|f| f.get("duration"))).or_else(|| num(video.get("duration"))).unwrap_or(0.0);
     Some(MediaInfo {
         duration_secs: duration,
@@ -160,7 +168,13 @@ pub struct Job<'a> {
 }
 
 /// Compress `input` into `output`. `progress` receives 0.0–1.0.
-pub fn compress(job: &Job, input: &Path, output: &Path, opts: &CompressOptions, mut progress: impl FnMut(f32)) -> Result<CompressResult, TranscodeError> {
+pub fn compress(
+    job: &Job,
+    input: &Path,
+    output: &Path,
+    opts: &CompressOptions,
+    mut progress: impl FnMut(f32),
+) -> Result<CompressResult, TranscodeError> {
     let ffprobe = job.ffmpeg.ffprobe.as_deref().ok_or(TranscodeError::NoFfprobe)?;
     let info = probe_media(ffprobe, input)?;
     let profile = match opts.target {
@@ -183,7 +197,8 @@ pub fn compress(job: &Job, input: &Path, output: &Path, opts: &CompressOptions, 
         let (rc, max_h) = match opts.target {
             CompressTarget::Profile(_) => (RateControl::Quality, opts.max_height),
             CompressTarget::SizeMb(mb) => {
-                let budget = size_budget_kbps(mb, info.duration_secs, a_kbps).ok_or_else(|| TranscodeError::TargetTooSmall(format!("{mb} MB for {:.0} s", info.duration_secs)))?;
+                let budget = size_budget_kbps(mb, info.duration_secs, a_kbps)
+                    .ok_or_else(|| TranscodeError::TargetTooSmall(format!("{mb} MB for {:.0} s", info.duration_secs)))?;
                 let budget = (budget as f64 * factor) as u32;
                 let auto = auto_height_for_budget(budget, info.height);
                 (RateControl::Bitrate(budget.max(120)), Some(opts.max_height.map_or(auto, |m| m.min(auto))))
@@ -251,18 +266,44 @@ fn slow_down_software_preset(args: &mut [String], codec: Codec) {
 }
 
 /// Lossless trim (stream copy). Cuts snap to the previous keyframe for `start`.
-pub fn trim(ffmpeg: &FfmpegInfo, input: &Path, output: &Path, start_secs: f64, end_secs: f64, cancel: &AtomicBool) -> Result<(), TranscodeError> {
+pub fn trim(
+    ffmpeg: &FfmpegInfo,
+    input: &Path,
+    output: &Path,
+    start_secs: f64,
+    end_secs: f64,
+    cancel: &AtomicBool,
+) -> Result<(), TranscodeError> {
     if end_secs <= start_secs {
         return Err(TranscodeError::Ffmpeg("end must be after start".into()));
     }
     let tmp = temp_path(output);
     let args: Vec<String> = vec![
-        "-hide_banner".into(), "-nostdin".into(), "-y".into(), "-loglevel".into(), "error".into(),
-        "-ss".into(), format!("{start_secs:.3}"), "-to".into(), format!("{end_secs:.3}"),
-        "-i".into(), input.display().to_string(),
-        "-map".into(), "0".into(), "-c".into(), "copy".into(), "-avoid_negative_ts".into(), "make_zero".into(),
-        "-movflags".into(), "+faststart".into(), "-f".into(), "mp4".into(),
-        "-progress".into(), "pipe:1".into(), "-nostats".into(), tmp.display().to_string(),
+        "-hide_banner".into(),
+        "-nostdin".into(),
+        "-y".into(),
+        "-loglevel".into(),
+        "error".into(),
+        "-ss".into(),
+        format!("{start_secs:.3}"),
+        "-to".into(),
+        format!("{end_secs:.3}"),
+        "-i".into(),
+        input.display().to_string(),
+        "-map".into(),
+        "0".into(),
+        "-c".into(),
+        "copy".into(),
+        "-avoid_negative_ts".into(),
+        "make_zero".into(),
+        "-movflags".into(),
+        "+faststart".into(),
+        "-f".into(),
+        "mp4".into(),
+        "-progress".into(),
+        "pipe:1".into(),
+        "-nostats".into(),
+        tmp.display().to_string(),
     ];
     match run_ffmpeg_progress(ffmpeg, &args, end_secs - start_secs, cancel, |_| {}) {
         Ok(()) => {
@@ -283,7 +324,13 @@ pub fn temp_path(output: &Path) -> PathBuf {
 }
 
 /// Run FFmpeg with `-progress pipe:1`, reporting progress and honouring cancellation.
-pub fn run_ffmpeg_progress(ffmpeg: &FfmpegInfo, args: &[String], duration_secs: f64, cancel: &AtomicBool, mut progress: impl FnMut(f32)) -> Result<(), TranscodeError> {
+pub fn run_ffmpeg_progress(
+    ffmpeg: &FfmpegInfo,
+    args: &[String],
+    duration_secs: f64,
+    cancel: &AtomicBool,
+    mut progress: impl FnMut(f32),
+) -> Result<(), TranscodeError> {
     let mut child = command(&ffmpeg.path)
         .args(args)
         .stdin(Stdio::null())
@@ -361,7 +408,30 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let src = dir.path().join("src.mp4");
         let st = command(&ff.path)
-            .args(["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc2=size=1280x720:rate=30", "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000", "-t", "6", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "10", "-c:a", "aac", "-shortest"])
+            .args([
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-f",
+                "lavfi",
+                "-i",
+                "testsrc2=size=1280x720:rate=30",
+                "-f",
+                "lavfi",
+                "-i",
+                "sine=frequency=440:sample_rate=48000",
+                "-t",
+                "6",
+                "-c:v",
+                "libx264",
+                "-preset",
+                "ultrafast",
+                "-crf",
+                "10",
+                "-c:a",
+                "aac",
+                "-shortest",
+            ])
             .arg(&src)
             .status()
             .unwrap();
@@ -372,7 +442,14 @@ mod tests {
         let job = Job { ffmpeg: &ff, encoder: enc, hw: &hw, cancel: &cancel };
         let out = dir.path().join("small.mp4");
         let mut last = 0.0;
-        let r = compress(&job, &src, &out, &CompressOptions { codec: Codec::H264, target: CompressTarget::SizeMb(1.0), max_height: None, max_fps: None }, |p| last = p).unwrap();
+        let r = compress(
+            &job,
+            &src,
+            &out,
+            &CompressOptions { codec: Codec::H264, target: CompressTarget::SizeMb(1.0), max_height: None, max_fps: None },
+            |p| last = p,
+        )
+        .unwrap();
         assert!(r.size_bytes <= 1_000_000, "size {}", r.size_bytes);
         assert_eq!(last, 1.0);
         let info = probe_media(ff.ffprobe.as_ref().unwrap(), &out).unwrap();

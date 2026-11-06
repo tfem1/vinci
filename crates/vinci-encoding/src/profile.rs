@@ -131,7 +131,10 @@ mod tests {
             assert!(max_kbps(c, QualityProfile::Balanced, 1920, 1080, 60) > b);
         }
         // HEVC/AV1 are always smaller than H.264 for the same profile.
-        assert!(target_kbps(Codec::Hevc, QualityProfile::Balanced, 1920, 1080, 60) < target_kbps(Codec::H264, QualityProfile::Balanced, 1920, 1080, 60));
+        assert!(
+            target_kbps(Codec::Hevc, QualityProfile::Balanced, 1920, 1080, 60)
+                < target_kbps(Codec::H264, QualityProfile::Balanced, 1920, 1080, 60)
+        );
     }
 
     #[test]

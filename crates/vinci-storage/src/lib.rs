@@ -156,7 +156,10 @@ pub fn dir_size(dir: &Path) -> u64 {
 
 /// Make a string safe as a file/folder name on Windows and Linux.
 pub fn sanitize_filename(name: &str) -> String {
-    const RESERVED: [&str; 22] = ["CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"];
+    const RESERVED: [&str; 22] = [
+        "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4",
+        "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+    ];
     let mut s: String = name.chars().map(|c| if c.is_control() || "<>:\"/\\|?*".contains(c) { '_' } else { c }).collect();
     s = s.trim().trim_end_matches(['.', ' ']).to_string();
     if s.is_empty() {
@@ -202,7 +205,9 @@ pub fn move_file(src: &Path, dst: &Path) -> io::Result<()> {
 pub fn cleanup_leftovers(paths: &AppPaths, clips_dir: &Path, min_age: Duration) -> usize {
     let mut n = 0;
     let now = SystemTime::now();
-    let old_enough = |p: &Path| fs::metadata(p).and_then(|m| m.modified()).map(|t| now.duration_since(t).unwrap_or_default() >= min_age).unwrap_or(false);
+    let old_enough = |p: &Path| {
+        fs::metadata(p).and_then(|m| m.modified()).map(|t| now.duration_since(t).unwrap_or_default() >= min_age).unwrap_or(false)
+    };
     if let Ok(rd) = fs::read_dir(&paths.ring_dir) {
         for e in rd.flatten() {
             if old_enough(&e.path()) && fs::remove_file(e.path()).is_ok() {
@@ -218,7 +223,14 @@ pub fn cleanup_leftovers(paths: &AppPaths, clips_dir: &Path, min_age: Duration) 
             let name = e.file_name().to_string_lossy().into_owned();
             if p.is_dir() && depth < 2 {
                 stack.push((p, depth + 1));
-            } else if name.starts_with('.') && (name.ends_with(".vinci-tmp") || name.contains(".part") || name.ends_with(".vinci-move") || name.ends_with(".concat.txt")) && old_enough(&p) && fs::remove_file(&p).is_ok() {
+            } else if name.starts_with('.')
+                && (name.ends_with(".vinci-tmp")
+                    || name.contains(".part")
+                    || name.ends_with(".vinci-move")
+                    || name.ends_with(".concat.txt"))
+                && old_enough(&p)
+                && fs::remove_file(&p).is_ok()
+            {
                 n += 1;
             }
         }

@@ -136,7 +136,12 @@ pub fn plan_video(
         // ---------------- Intel Quick Sync (Windows) ----------------
         (EncoderFamily::Qsv, FrameSource::D3D11) => {
             let adapter = hw.d3d11_adapter.unwrap_or(0);
-            global.extend(s(["-init_hw_device".to_string(), format!("d3d11va=vinci_d3d:{adapter}"), "-init_hw_device".into(), "qsv=vinci_qsv@vinci_d3d".into()]));
+            global.extend(s([
+                "-init_hw_device".to_string(),
+                format!("d3d11va=vinci_d3d:{adapter}"),
+                "-init_hw_device".into(),
+                "qsv=vinci_qsv@vinci_d3d".into(),
+            ]));
             if caps.scale_d3d11 {
                 let size = scale_to.map(|(w, h)| format!("width={w}:height={h}:")).unwrap_or_default();
                 chain.push(format!("scale_d3d11={size}format=nv12"));
@@ -174,7 +179,11 @@ pub fn plan_video(
         }
     }
 
-    EncodePlan { global_args: global, filter: if chain.is_empty() { None } else { Some(chain.join(",")) }, encoder_args: encoder_args(enc, params, rc) }
+    EncodePlan {
+        global_args: global,
+        filter: if chain.is_empty() { None } else { Some(chain.join(",")) },
+        encoder_args: encoder_args(enc, params, rc),
+    }
 }
 
 /// Codec + rate-control arguments for one encoder.
@@ -182,7 +191,9 @@ pub fn encoder_args(enc: &EncoderInfo, p: &VideoParams, rc: RateControl) -> Vec<
     use crate::profile::QualityProfile as Q;
     let gop = p.gop().to_string();
     let (target, peak) = match rc {
-        RateControl::Quality => (target_kbps(p.codec, p.profile, p.width, p.height, p.fps), max_kbps(p.codec, p.profile, p.width, p.height, p.fps)),
+        RateControl::Quality => {
+            (target_kbps(p.codec, p.profile, p.width, p.height, p.fps), max_kbps(p.codec, p.profile, p.width, p.height, p.fps))
+        }
         RateControl::Bitrate(k) => (k, (k as f64 * 1.25) as u32),
     };
     let k = |v: u32| format!("{v}k");
@@ -223,7 +234,16 @@ pub fn encoder_args(enc: &EncoderInfo, p: &VideoParams, rc: RateControl) -> Vec<
             }
         }
         EncoderFamily::Vaapi => {
-            a.extend(s(["-rc_mode".to_string(), "VBR".into(), "-b:v".into(), k(target), "-maxrate".into(), k(peak), "-bufsize".into(), k(peak * 2)]));
+            a.extend(s([
+                "-rc_mode".to_string(),
+                "VBR".into(),
+                "-b:v".into(),
+                k(target),
+                "-maxrate".into(),
+                k(peak),
+                "-bufsize".into(),
+                k(peak * 2),
+            ]));
             if p.codec == Codec::H264 {
                 a.extend(s(["-profile:v", "high"]));
             }
@@ -276,7 +296,15 @@ mod tests {
     #[test]
     fn nvenc_d3d11_zero_copy() {
         let enc = find("hevc_nvenc").unwrap();
-        let plan = plan_video(enc, &params(Codec::Hevc), RateControl::Quality, FrameSource::D3D11, None, FilterCaps::default(), &HwContext::default());
+        let plan = plan_video(
+            enc,
+            &params(Codec::Hevc),
+            RateControl::Quality,
+            FrameSource::D3D11,
+            None,
+            FilterCaps::default(),
+            &HwContext::default(),
+        );
         assert_eq!(plan.filter, None, "no download / conversion for NVENC from D3D11");
         let a = plan.encoder_args.join(" ");
         assert!(a.contains("-rc vbr -cq 25 -b:v 0"), "{a}");
@@ -287,9 +315,18 @@ mod tests {
     fn nvenc_d3d11_scale_uses_gpu_when_possible() {
         let enc = find("h264_nvenc").unwrap();
         let caps = FilterCaps { scale_d3d11: true, ..Default::default() };
-        let plan = plan_video(enc, &params(Codec::H264), RateControl::Quality, FrameSource::D3D11, Some((1280, 720)), caps, &HwContext::default());
+        let plan =
+            plan_video(enc, &params(Codec::H264), RateControl::Quality, FrameSource::D3D11, Some((1280, 720)), caps, &HwContext::default());
         assert_eq!(plan.filter.as_deref(), Some("scale_d3d11=width=1280:height=720:format=nv12"));
-        let plan = plan_video(enc, &params(Codec::H264), RateControl::Quality, FrameSource::D3D11, Some((1280, 720)), FilterCaps::default(), &HwContext::default());
+        let plan = plan_video(
+            enc,
+            &params(Codec::H264),
+            RateControl::Quality,
+            FrameSource::D3D11,
+            Some((1280, 720)),
+            FilterCaps::default(),
+            &HwContext::default(),
+        );
         assert!(plan.filter.unwrap().starts_with("hwdownload,format=bgra,scale=1280:720"));
     }
 
@@ -318,7 +355,15 @@ mod tests {
     #[test]
     fn software_fallback() {
         let enc = find("libx264").unwrap();
-        let plan = plan_video(enc, &params(Codec::H264), RateControl::Bitrate(3000), FrameSource::D3D11, None, FilterCaps::default(), &HwContext::default());
+        let plan = plan_video(
+            enc,
+            &params(Codec::H264),
+            RateControl::Bitrate(3000),
+            FrameSource::D3D11,
+            None,
+            FilterCaps::default(),
+            &HwContext::default(),
+        );
         assert_eq!(plan.filter.as_deref(), Some("hwdownload,format=bgra,format=yuv420p"));
         let a = plan.encoder_args.join(" ");
         assert!(a.contains("-preset veryfast -b:v 3000k -maxrate 3750k"), "{a}");

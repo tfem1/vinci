@@ -157,7 +157,8 @@ fn row_to_clip(r: &Row) -> rusqlite::Result<Clip> {
     })
 }
 
-const COLS: &str = "id, path, title, game, created_at, duration, size, width, height, fps, video_codec, audio_codec, encoder, favorite, thumbnail";
+const COLS: &str =
+    "id, path, title, game, created_at, duration, size, width, height, fps, video_codec, audio_codec, encoder, favorite, thumbnail";
 
 impl Library {
     pub fn open(db: &Path, thumbs_dir: &Path) -> Result<Self> {
@@ -257,9 +258,15 @@ impl Library {
     }
 
     pub fn stats(&self) -> Result<LibraryStats> {
-        let (count, bytes, dur): (i64, i64, f64) = self.conn.query_row("SELECT COUNT(*), IFNULL(SUM(size),0), IFNULL(SUM(duration),0) FROM clips", [], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?;
-        let mut stmt = self.conn.prepare("SELECT game, COUNT(*) FROM clips WHERE game IS NOT NULL GROUP BY game ORDER BY COUNT(*) DESC, game")?;
-        let games = stmt.query_map([], |r| Ok(GameCount { game: r.get(0)?, count: r.get::<_, i64>(1)? as u64 }))?.collect::<rusqlite::Result<Vec<_>>>()?;
+        let (count, bytes, dur): (i64, i64, f64) =
+            self.conn.query_row("SELECT COUNT(*), IFNULL(SUM(size),0), IFNULL(SUM(duration),0) FROM clips", [], |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?))
+            })?;
+        let mut stmt =
+            self.conn.prepare("SELECT game, COUNT(*) FROM clips WHERE game IS NOT NULL GROUP BY game ORDER BY COUNT(*) DESC, game")?;
+        let games = stmt
+            .query_map([], |r| Ok(GameCount { game: r.get(0)?, count: r.get::<_, i64>(1)? as u64 }))?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
         Ok(LibraryStats { count: count as u64, total_bytes: bytes as u64, total_duration: dur, games })
     }
 
@@ -286,7 +293,10 @@ impl Library {
         if new_path != clip.path && clip.path.exists() {
             std::fs::rename(&clip.path, &new_path)?;
         }
-        self.conn.execute("UPDATE clips SET title = ?2, path = ?3, mtime = ?4 WHERE id = ?1", params![id, title, new_path.to_string_lossy(), mtime_of(&new_path)])?;
+        self.conn.execute(
+            "UPDATE clips SET title = ?2, path = ?3, mtime = ?4 WHERE id = ?1",
+            params![id, title, new_path.to_string_lossy(), mtime_of(&new_path)],
+        )?;
         self.get(id)
     }
 
@@ -337,7 +347,7 @@ impl Library {
     /// `probe` reads media info for newly discovered files.
     pub fn scan(&self, clips_dir: &Path, probe: &dyn Fn(&Path) -> Option<MediaInfo>) -> Result<ScanReport> {
         let mut report = ScanReport::default();
-                let mut stack = vec![(clips_dir.to_path_buf(), 0u8)];
+        let mut stack = vec![(clips_dir.to_path_buf(), 0u8)];
         while let Some((dir, depth)) = stack.pop() {
             let Ok(rd) = std::fs::read_dir(&dir) else { continue };
             for e in rd.flatten() {
@@ -379,7 +389,8 @@ impl Library {
         }
         // Rows whose file is gone (deleted or moved away in the file manager).
         let mut stmt = self.conn.prepare("SELECT id, path, thumbnail FROM clips")?;
-        let rows: Vec<(i64, String, Option<String>)> = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?.collect::<rusqlite::Result<_>>()?;
+        let rows: Vec<(i64, String, Option<String>)> =
+            stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?.collect::<rusqlite::Result<_>>()?;
         for (id, path, thumb) in rows {
             let p = PathBuf::from(&path);
             if !p.exists() {
@@ -451,7 +462,16 @@ mod tests {
     use super::*;
 
     fn media(d: f64) -> MediaInfo {
-        MediaInfo { duration_secs: d, width: 1920, height: 1080, fps: 60.0, video_codec: "hevc".into(), audio_codec: Some("aac".into()), size_bytes: 0, bitrate_kbps: 0 }
+        MediaInfo {
+            duration_secs: d,
+            width: 1920,
+            height: 1080,
+            fps: 60.0,
+            video_codec: "hevc".into(),
+            audio_codec: Some("aac".into()),
+            size_bytes: 0,
+            bitrate_kbps: 0,
+        }
     }
 
     fn setup() -> (tempfile::TempDir, Library, PathBuf) {
@@ -464,7 +484,15 @@ mod tests {
 
     fn add(lib: &Library, path: &Path, game: Option<&str>, t: i64, bytes: usize) -> Clip {
         std::fs::write(path, vec![0u8; bytes]).unwrap();
-        lib.insert(NewClip { path: path.into(), title: path.file_stem().unwrap().to_string_lossy().into(), game: game.map(String::from), created_at: t, encoder: Some("hevc_nvenc".into()), media: media(30.0) }).unwrap()
+        lib.insert(NewClip {
+            path: path.into(),
+            title: path.file_stem().unwrap().to_string_lossy().into(),
+            game: game.map(String::from),
+            created_at: t,
+            encoder: Some("hevc_nvenc".into()),
+            media: media(30.0),
+        })
+        .unwrap()
     }
 
     #[test]
@@ -475,7 +503,11 @@ mod tests {
         assert_eq!(lib.list(&ClipQuery::default()).unwrap().iter().map(|c| c.id).collect::<Vec<_>>(), vec![b.id, a.id]);
         assert_eq!(lib.list(&ClipQuery { sort: SortBy::Smallest, ..Default::default() }).unwrap()[0].id, a.id);
         assert_eq!(lib.list(&ClipQuery { search: Some("valo".into()), ..Default::default() }).unwrap().len(), 1);
-        assert_eq!(lib.list(&ClipQuery { search: Some("100%".into()), ..Default::default() }).unwrap().len(), 1, "LIKE wildcards are escaped");
+        assert_eq!(
+            lib.list(&ClipQuery { search: Some("100%".into()), ..Default::default() }).unwrap().len(),
+            1,
+            "LIKE wildcards are escaped"
+        );
         assert_eq!(lib.list(&ClipQuery { search: Some("_".into()), ..Default::default() }).unwrap().len(), 1);
         assert_eq!(lib.list(&ClipQuery { game: Some("Valorant".into()), ..Default::default() }).unwrap().len(), 1);
         lib.set_favorite(b.id, true).unwrap();
@@ -532,7 +564,24 @@ mod tests {
         let Ok(ff) = vinci_hw::ffmpeg::locate(None) else { return };
         let (_d, lib, clips) = setup();
         let p = clips.join("t.mp4");
-        let ok = std::process::Command::new(&ff.path).args(["-loglevel", "error", "-f", "lavfi", "-i", "testsrc2=size=640x360:rate=30", "-t", "3", "-c:v", "libx264", "-preset", "ultrafast"]).arg(&p).status().unwrap();
+        let ok = std::process::Command::new(&ff.path)
+            .args([
+                "-loglevel",
+                "error",
+                "-f",
+                "lavfi",
+                "-i",
+                "testsrc2=size=640x360:rate=30",
+                "-t",
+                "3",
+                "-c:v",
+                "libx264",
+                "-preset",
+                "ultrafast",
+            ])
+            .arg(&p)
+            .status()
+            .unwrap();
         assert!(ok.success());
         let c = lib.insert(NewClip { path: p, title: "t".into(), created_at: 1, media: media(3.0), ..Default::default() }).unwrap();
         let t = lib.ensure_thumbnail(c.id, &ff.path).unwrap().unwrap();

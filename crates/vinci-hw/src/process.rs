@@ -55,9 +55,5 @@ pub fn is_executable(p: &std::path::Path) -> bool {
 pub fn run_capture(cmd: &mut Command) -> std::io::Result<(bool, String, String)> {
     use std::process::Stdio;
     let out = cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).output()?;
-    Ok((
-        out.status.success(),
-        String::from_utf8_lossy(&out.stdout).into_owned(),
-        String::from_utf8_lossy(&out.stderr).into_owned(),
-    ))
+    Ok((out.status.success(), String::from_utf8_lossy(&out.stdout).into_owned(), String::from_utf8_lossy(&out.stderr).into_owned()))
 }

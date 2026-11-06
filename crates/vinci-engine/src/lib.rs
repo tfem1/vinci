@@ -407,11 +407,16 @@ impl Engine {
         self.emit_status();
     }
 
-    fn build_spec(&self, hw: &HwState, blacklist: &HashSet<String>) -> std::result::Result<(PipelineSpec, vinci_hw::FfmpegInfo, Option<String>), String> {
+    fn build_spec(
+        &self,
+        hw: &HwState,
+        blacklist: &HashSet<String>,
+    ) -> std::result::Result<(PipelineSpec, vinci_hw::FfmpegInfo, Option<String>), String> {
         let s = self.settings();
         let ff = hw.report.ffmpeg.clone().ok_or_else(|| hw.report.ffmpeg_error.clone().unwrap_or_else(|| "FFmpeg not found".into()))?;
         let display = hw.report.system.display_server;
-        let backend = vinci_capture::resolve_backend(s.capture.backend, &ff, hw.report.gstreamer.as_ref(), display).map_err(|e| e.to_string())?;
+        let backend =
+            vinci_capture::resolve_backend(s.capture.backend, &ff, hw.report.gstreamer.as_ref(), display).map_err(|e| e.to_string())?;
         let monitor = match backend {
             BackendKind::Test | BackendKind::Portal => MonitorInfo::synthetic(1920, 1080),
             _ => {
@@ -431,20 +436,22 @@ impl Engine {
         let profile = s.effective_profile();
         let codec = s.encoding.codec.resolve(profile);
         let probes: Vec<_> = hw.probes.iter().filter(|p| !blacklist.contains(&p.id)).cloned().collect();
-        let (enc, fell_back) = vinci_encoding::select(&probes, codec, s.encoding.encoder.as_deref(), s.encoding.allow_software).ok_or_else(|| {
-            if hw.probes.iter().any(|p| p.ok) {
-                "every working encoder failed repeatedly — see Settings → Diagnostics".to_string()
-            } else {
-                "no working video encoder found (no hardware encoder, and CPU encoding is disabled or missing from FFmpeg)".to_string()
-            }
-        })?;
+        let (enc, fell_back) = vinci_encoding::select(&probes, codec, s.encoding.encoder.as_deref(), s.encoding.allow_software)
+            .ok_or_else(|| {
+                if hw.probes.iter().any(|p| p.ok) {
+                    "every working encoder failed repeatedly — see Settings → Diagnostics".to_string()
+                } else {
+                    "no working video encoder found (no hardware encoder, and CPU encoding is disabled or missing from FFmpeg)".to_string()
+                }
+            })?;
         let fps = s.effective_fps();
         let out = if backend == BackendKind::Test {
             s.capture.resolution.output_size(1920, 1080)
         } else {
             s.capture.resolution.output_size(monitor.width, monitor.height)
         };
-        let video = VideoParams { codec: enc.codec, profile, width: out.0, height: out.1, fps, keyint_secs: s.encoding.keyframe_interval_secs };
+        let video =
+            VideoParams { codec: enc.codec, profile, width: out.0, height: out.1, fps, keyint_secs: s.encoding.keyframe_interval_secs };
         let note = fell_back.then(|| format!("Using {} — the requested {} encoder is not available on this PC", enc.label, codec.label()));
         let spec = PipelineSpec {
             backend,
@@ -471,7 +478,8 @@ impl Engine {
     fn make_buffer(&self, s: &Settings, video: &VideoParams) -> std::io::Result<ReplayBuffer> {
         let keyint = s.encoding.keyframe_interval_secs as f64;
         let dur = s.replay.buffer_secs as f64 + keyint;
-        let peak_kbps = vinci_encoding::profile::max_kbps(video.codec, video.profile, video.width, video.height, video.fps) + vinci_encoding::profile::audio_kbps(video.profile);
+        let peak_kbps = vinci_encoding::profile::max_kbps(video.codec, video.profile, video.width, video.height, video.fps)
+            + vinci_encoding::profile::audio_kbps(video.profile);
         let est_bytes = (peak_kbps as f64 * 1000.0 / 8.0 * (dur + keyint)) as u64;
         let ram_cap = s.replay.max_ram_mb as u64 * 1024 * 1024;
         let use_disk = match s.replay.storage {
@@ -727,8 +735,18 @@ impl Engine {
             }
             match &res {
                 Ok((clip, remuxed)) => {
-                    log::info!("clip saved: {} ({:.1} s, {} bytes) in {} ms", clip.path.display(), clip.duration, clip.size, t0.elapsed().as_millis());
-                    self.emit(EngineEvent::ClipSaved { clip: clip.clone(), remuxed: *remuxed, elapsed_ms: t0.elapsed().as_millis() as u64 });
+                    log::info!(
+                        "clip saved: {} ({:.1} s, {} bytes) in {} ms",
+                        clip.path.display(),
+                        clip.duration,
+                        clip.size,
+                        t0.elapsed().as_millis()
+                    );
+                    self.emit(EngineEvent::ClipSaved {
+                        clip: clip.clone(),
+                        remuxed: *remuxed,
+                        elapsed_ms: t0.elapsed().as_millis() as u64,
+                    });
                     self.emit(EngineEvent::LibraryChanged);
                 }
                 Err(e) => {
@@ -756,7 +774,13 @@ impl Engine {
             }
             std::thread::sleep(Duration::from_millis(20));
         }
-        let snap = self.0.buffer.lock().as_ref().and_then(|b| b.snapshot(secs as f64)).ok_or("Nothing to save yet — start the replay buffer first")?;
+        let snap = self
+            .0
+            .buffer
+            .lock()
+            .as_ref()
+            .and_then(|b| b.snapshot(secs as f64))
+            .ok_or("Nothing to save yet — start the replay buffer first")?;
         let hw = self.hardware(false);
         let ff = hw.report.ffmpeg.clone().ok_or("FFmpeg not found")?;
         let game = self.0.game.read().as_ref().map(|g| g.name.clone());
@@ -773,16 +797,24 @@ impl Engine {
             }
         }
         let path = vinci_storage::unique_path(&dir, &vinci_clips::default_file_stem(game.as_deref(), now), "mp4");
-        let res = vinci_replay::export(&snap, &path, Some(&ff.path), &|p: &Path| vinci_hw::process::command(p)).map_err(|e| e.to_string())?;
-        let media = ff
-            .ffprobe
-            .as_ref()
-            .and_then(|p| vinci_encoding::transcode::probe_media(p, &path).ok())
-            .unwrap_or(MediaInfo { duration_secs: snap.duration, size_bytes: res.bytes, ..Default::default() });
+        let res =
+            vinci_replay::export(&snap, &path, Some(&ff.path), &|p: &Path| vinci_hw::process::command(p)).map_err(|e| e.to_string())?;
+        let media = ff.ffprobe.as_ref().and_then(|p| vinci_encoding::transcode::probe_media(p, &path).ok()).unwrap_or(MediaInfo {
+            duration_secs: snap.duration,
+            size_bytes: res.bytes,
+            ..Default::default()
+        });
         let encoder = self.0.status.lock().session.as_ref().map(|s| s.encoder.clone());
         let lib = self.0.library.lock();
         let clip = lib
-            .insert(NewClip { path, title: vinci_clips::default_title(game.as_deref(), now), game, created_at: now.timestamp_millis(), encoder, media })
+            .insert(NewClip {
+                path,
+                title: vinci_clips::default_title(game.as_deref(), now),
+                game,
+                created_at: now.timestamp_millis(),
+                encoder,
+                media,
+            })
             .map_err(|e| e.to_string())?;
         let _ = lib.ensure_thumbnail(clip.id, &ff.path);
         let clip = lib.get(clip.id).map_err(|e| e.to_string())?;
@@ -876,7 +908,11 @@ impl Engine {
             JobKind::Compress { replace, .. } | JobKind::Trim { replace, .. } => *replace,
         };
         // Intermediate output (hidden) — renamed over the original on success when replacing.
-        let out = if replace { dir.join(format!(".{stem}.vinci-job.mp4")) } else { vinci_storage::unique_path(&dir, &format!("{stem} ({})", if kind_name == "trim" { "trimmed" } else { "compressed" }), "mp4") };
+        let out = if replace {
+            dir.join(format!(".{stem}.vinci-job.mp4"))
+        } else {
+            vinci_storage::unique_path(&dir, &format!("{stem} ({})", if kind_name == "trim" { "trimmed" } else { "compressed" }), "mp4")
+        };
         let mut last = Instant::now() - Duration::from_secs(1);
         let mut used_encoder: Option<String> = None;
         match &job.kind {
@@ -911,7 +947,15 @@ impl Engine {
             lib.refresh_media(clip.id, &media, used_encoder.as_deref()).map_err(|e| e.to_string())?
         } else {
             let suffix = if kind_name == "trim" { "trimmed" } else { "compressed" };
-            lib.insert(NewClip { path: out, title: format!("{} ({suffix})", clip.title), game: clip.game.clone(), created_at: now_ms(), encoder: used_encoder, media }).map_err(|e| e.to_string())?
+            lib.insert(NewClip {
+                path: out,
+                title: format!("{} ({suffix})", clip.title),
+                game: clip.game.clone(),
+                created_at: now_ms(),
+                encoder: used_encoder,
+                media,
+            })
+            .map_err(|e| e.to_string())?
         };
         let _ = lib.ensure_thumbnail(result.id, &ff.path);
         lib.get(result.id).map_err(|e| e.to_string())
@@ -948,7 +992,10 @@ impl Engine {
                             self.stop_replay();
                         }
                     }
-                    if s.capture.target == CaptureTarget::FollowGame && self.is_capturing() && self.status().session.is_some_and(|x| x.backend == BackendKind::Wgc) {
+                    if s.capture.target == CaptureTarget::FollowGame
+                        && self.is_capturing()
+                        && self.status().session.is_some_and(|x| x.backend == BackendKind::Wgc)
+                    {
                         self.stop_replay();
                         *self.0.buffer.lock() = None;
                         let _ = self.start_replay();
@@ -1018,7 +1065,11 @@ impl Engine {
     }
 
     /// Download, verify and apply an update. The caller restarts/exits per the outcome.
-    pub fn install_update(&self, upd: &vinci_update::AvailableUpdate, progress: impl FnMut(u64, u64)) -> std::result::Result<vinci_update::kind::ApplyOutcome, String> {
+    pub fn install_update(
+        &self,
+        upd: &vinci_update::AvailableUpdate,
+        progress: impl FnMut(u64, u64),
+    ) -> std::result::Result<vinci_update::kind::ApplyOutcome, String> {
         let u = self.updater();
         let file = u.download(upd, &self.0.paths.cache_dir.join("updates"), progress).map_err(|e| e.to_string())?;
         u.apply(&file).map_err(|e| e.to_string())
@@ -1044,12 +1095,21 @@ impl Engine {
             .hw
             .read()
             .as_ref()
-            .and_then(|hw| vinci_encoding::select(&hw.probes, s.encoding.codec.resolve(profile), s.encoding.encoder.as_deref(), s.encoding.allow_software).map(|(e, _)| e.codec))
+            .and_then(|hw| {
+                vinci_encoding::select(
+                    &hw.probes,
+                    s.encoding.codec.resolve(profile),
+                    s.encoding.encoder.as_deref(),
+                    s.encoding.allow_software,
+                )
+                .map(|(e, _)| e.codec)
+            })
             .unwrap_or_else(|| s.encoding.codec.resolve(profile));
         let fps = s.effective_fps();
         let mbm = vinci_encoding::profile::estimate_mb_per_minute(codec, profile, w, h, fps);
         let buffer_mb = mbm * s.replay.buffer_secs as f64 / 60.0;
-        let peak_mb = buffer_mb * vinci_encoding::profile::max_kbps(codec, profile, w, h, fps) as f64 / vinci_encoding::profile::target_kbps(codec, profile, w, h, fps) as f64;
+        let peak_mb = buffer_mb * vinci_encoding::profile::max_kbps(codec, profile, w, h, fps) as f64
+            / vinci_encoding::profile::target_kbps(codec, profile, w, h, fps) as f64;
         let storage = match s.replay.storage {
             BufferStorage::Memory => "memory",
             BufferStorage::Disk => "disk",

@@ -120,7 +120,13 @@ pub fn parse_moov(moov: &[u8]) -> Result<InitInfo, Mp4Error> {
         }
         .ok_or(Mp4Error::Truncated("mdhd"))?;
         let handler = find(mdia, b"hdlr").and_then(|h| h.get(8..12)).unwrap_or(b"    ");
-        info.tracks.push(TrackInfo { id, timescale: timescale.max(1), is_video: handler == b"vide", is_audio: handler == b"soun", ..Default::default() });
+        info.tracks.push(TrackInfo {
+            id,
+            timescale: timescale.max(1),
+            is_video: handler == b"vide",
+            is_audio: handler == b"soun",
+            ..Default::default()
+        });
     }
     if let Some(mvex) = find(moov, b"mvex") {
         for (kind, trex) in children(mvex) {

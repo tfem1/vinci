@@ -59,7 +59,13 @@ fn main() {
                     assets.insert(k.to_string(), Asset { url: format!("{}/{name}", base.trim_end_matches('/')), sha256, size });
                 }
             }
-            let m = Manifest { version, channel, pub_date: arg(&args, "--date").unwrap_or_default(), notes: arg(&args, "--notes").unwrap_or_default(), assets };
+            let m = Manifest {
+                version,
+                channel,
+                pub_date: arg(&args, "--date").unwrap_or_default(),
+                notes: arg(&args, "--notes").unwrap_or_default(),
+                assets,
+            };
             let signed = sign_manifest(&m, &key()).unwrap_or_else(|e| die(&e.to_string()));
             std::fs::write(&out, serde_json::to_vec_pretty(&signed).unwrap()).unwrap_or_else(|e| die(&e.to_string()));
             eprintln!("wrote {} ({} assets)", out.display(), m.assets.len());
@@ -70,12 +76,15 @@ fn main() {
             let data = std::fs::read(&input).unwrap_or_else(|e| die(&e.to_string()));
             let sig = sign_bytes(&data, &key()).unwrap_or_else(|e| die(&e.to_string()));
             std::fs::write(&out, sig).unwrap_or_else(|e| die(&e.to_string()));
-            eprintln!("wrote {out} (raw Ed25519, verify with: openssl pkeyutl -verify -pubin -inkey pub.pem -rawin -in {input} -sigfile {out})");
+            eprintln!(
+                "wrote {out} (raw Ed25519, verify with: openssl pkeyutl -verify -pubin -inkey pub.pem -rawin -in {input} -sigfile {out})"
+            );
         }
         Some("verify") => {
             let pk = arg(&args, "--pubkey").unwrap_or_else(|| die("--pubkey required"));
             let file = arg(&args, "--manifest").unwrap_or_else(|| die("--manifest required"));
-            let s: SignedManifest = serde_json::from_slice(&std::fs::read(&file).unwrap_or_else(|e| die(&e.to_string()))).unwrap_or_else(|e| die(&e.to_string()));
+            let s: SignedManifest = serde_json::from_slice(&std::fs::read(&file).unwrap_or_else(|e| die(&e.to_string())))
+                .unwrap_or_else(|e| die(&e.to_string()));
             match verify_manifest(&s, &pk) {
                 Ok(m) => println!("OK: VINCI {} ({:?}), {} assets", m.version, m.channel, m.assets.len()),
                 Err(e) => die(&e.to_string()),

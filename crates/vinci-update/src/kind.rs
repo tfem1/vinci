@@ -8,10 +8,16 @@ use std::path::{Path, PathBuf};
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum InstallKind {
     /// Per-user NSIS installer (`%LOCALAPPDATA%\VINCI`) — no admin rights needed.
-    WindowsNsis { exe: PathBuf },
+    WindowsNsis {
+        exe: PathBuf,
+    },
     /// MSI (per-machine).
-    WindowsMsi { exe: PathBuf },
-    AppImage { path: PathBuf },
+    WindowsMsi {
+        exe: PathBuf,
+    },
+    AppImage {
+        path: PathBuf,
+    },
     Deb,
     Rpm,
     /// Built from source / unknown.
@@ -55,7 +61,13 @@ pub fn detect_install_kind() -> InstallKind {
             return InstallKind::Deb;
         }
         if let Some(rpm) = vinci_hw::process::which("rpm") {
-            let ok = vinci_hw::process::command(rpm).args(["-q", "vinci"]).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).status().map(|s| s.success()).unwrap_or(false);
+            let ok = vinci_hw::process::command(rpm)
+                .args(["-q", "vinci"])
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false);
             if ok {
                 return InstallKind::Rpm;
             }

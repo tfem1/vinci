@@ -15,7 +15,9 @@ use crate::config::{AudioConfig, BackendKind};
 use crate::monitors::MonitorInfo;
 use crate::CaptureError;
 use serde::{Deserialize, Serialize};
-use vinci_encoding::{audio_args, plan_video, Codec, EncoderFamily, EncoderInfo, FilterCaps, FrameSource, HwContext, RateControl, VideoParams};
+use vinci_encoding::{
+    audio_args, plan_video, Codec, EncoderFamily, EncoderInfo, FilterCaps, FrameSource, HwContext, RateControl, VideoParams,
+};
 use vinci_hw::{DisplayServer, FfmpegInfo, GstInfo};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -52,7 +54,12 @@ pub struct PipelineSpec {
 }
 
 /// Pick the concrete backend for a request on this machine.
-pub fn resolve_backend(requested: BackendKind, ffmpeg: &FfmpegInfo, gst: Option<&GstInfo>, display: DisplayServer) -> Result<BackendKind, CaptureError> {
+pub fn resolve_backend(
+    requested: BackendKind,
+    ffmpeg: &FfmpegInfo,
+    gst: Option<&GstInfo>,
+    display: DisplayServer,
+) -> Result<BackendKind, CaptureError> {
     let has_portal = gst.is_some_and(|g| g.has("pipewiresrc"));
     let ok = |b: BackendKind| -> bool {
         match b {
@@ -79,8 +86,12 @@ pub fn resolve_backend(requested: BackendKind, ffmpeg: &FfmpegInfo, gst: Option<
     };
     order.iter().copied().find(|b| ok(*b)).ok_or_else(|| {
         CaptureError::NoBackend(match (requested, display) {
-            (BackendKind::Auto, DisplayServer::Wayland) => "Wayland capture needs GStreamer with the PipeWire plugin (gstreamer1.0-pipewire) and xdg-desktop-portal".into(),
-            (BackendKind::Auto, DisplayServer::Windows) => "this FFmpeg build has neither gfxcapture (WGC) nor ddagrab (DDA); use the FFmpeg bundled with VINCI".into(),
+            (BackendKind::Auto, DisplayServer::Wayland) => {
+                "Wayland capture needs GStreamer with the PipeWire plugin (gstreamer1.0-pipewire) and xdg-desktop-portal".into()
+            }
+            (BackendKind::Auto, DisplayServer::Windows) => {
+                "this FFmpeg build has neither gfxcapture (WGC) nor ddagrab (DDA); use the FFmpeg bundled with VINCI".into()
+            }
             (BackendKind::Auto, DisplayServer::Unknown) => "no graphical session detected (DISPLAY / WAYLAND_DISPLAY unset)".into(),
             (r, _) => format!("{} is not available on this system", r.label()),
         })
@@ -115,7 +126,9 @@ pub fn ffmpeg_command(spec: &PipelineSpec, ffmpeg: &FfmpegInfo) -> Result<Ffmpeg
         BackendKind::Dda => (FrameSource::D3D11, (spec.out_size != (sw, sh)).then_some(spec.out_size)),
         BackendKind::X11 => (FrameSource::SystemRgb, (spec.out_size != (sw, sh)).then_some(spec.out_size)),
         BackendKind::Test => (FrameSource::SystemYuv, None),
-        BackendKind::Portal | BackendKind::Auto => return Err(CaptureError::NoBackend("ffmpeg_command called for a non-FFmpeg backend".into())),
+        BackendKind::Portal | BackendKind::Auto => {
+            return Err(CaptureError::NoBackend("ffmpeg_command called for a non-FFmpeg backend".into()))
+        }
     };
     let plan = plan_video(&spec.encoder, &spec.video, RateControl::Quality, frame_source, scale_to, caps, &hw);
 
@@ -187,7 +200,23 @@ pub fn ffmpeg_command(spec: &PipelineSpec, ffmpeg: &FfmpegInfo) -> Result<Ffmpeg
         } else {
             let mut pulse = |a: &mut Vec<String>, dev: &str, vol: f32| {
                 offset(a);
-                push(a, ["-thread_queue_size", "1024", "-f", "pulse", "-sample_rate", "48000", "-channels", "2", "-fragment_size", "3840", "-i", dev]);
+                push(
+                    a,
+                    [
+                        "-thread_queue_size",
+                        "1024",
+                        "-f",
+                        "pulse",
+                        "-sample_rate",
+                        "48000",
+                        "-channels",
+                        "2",
+                        "-fragment_size",
+                        "3840",
+                        "-i",
+                        dev,
+                    ],
+                );
                 audio_inputs.push((input_idx, vol));
                 input_idx += 1;
             };
@@ -323,15 +352,27 @@ pub fn gst_portal_args(spec: &PipelineSpec, gst: &GstInfo, pipewire_fd: i32, nod
     if spec.audio.any() {
         if let Some(enc) = aac {
             let kb = spec.audio_kbps * 1000;
-            let src = |dev: &str, vol: f32| format!("pulsesrc device={dev} do-timestamp=true provide-clock=false ! audioconvert ! audioresample ! audio/x-raw,rate=48000,channels=2 ! volume volume={vol:.2}");
+            let src = |dev: &str, vol: f32| {
+                format!("pulsesrc device={dev} do-timestamp=true provide-clock=false ! audioconvert ! audioresample ! audio/x-raw,rate=48000,channels=2 ! volume volume={vol:.2}")
+            };
             match (spec.audio.system, spec.audio.microphone) {
                 (true, true) => {
                     audio_parts.push(format!("audiomixer name=amix ! audioconvert ! {enc} bitrate={kb} ! aacparse ! queue ! mux."));
-                    audio_parts.push(format!("{} ! queue ! amix.", src(spec.audio.system_device.as_deref().unwrap_or("@DEFAULT_MONITOR@"), spec.audio.system_volume)));
-                    audio_parts.push(format!("{} ! queue ! amix.", src(spec.audio.mic_device.as_deref().unwrap_or("@DEFAULT_SOURCE@"), spec.audio.mic_volume)));
+                    audio_parts.push(format!(
+                        "{} ! queue ! amix.",
+                        src(spec.audio.system_device.as_deref().unwrap_or("@DEFAULT_MONITOR@"), spec.audio.system_volume)
+                    ));
+                    audio_parts.push(format!(
+                        "{} ! queue ! amix.",
+                        src(spec.audio.mic_device.as_deref().unwrap_or("@DEFAULT_SOURCE@"), spec.audio.mic_volume)
+                    ));
                 }
                 (sys, _) => {
-                    let dev = if sys { spec.audio.system_device.as_deref().unwrap_or("@DEFAULT_MONITOR@") } else { spec.audio.mic_device.as_deref().unwrap_or("@DEFAULT_SOURCE@") };
+                    let dev = if sys {
+                        spec.audio.system_device.as_deref().unwrap_or("@DEFAULT_MONITOR@")
+                    } else {
+                        spec.audio.mic_device.as_deref().unwrap_or("@DEFAULT_SOURCE@")
+                    };
                     let vol = if sys { spec.audio.system_volume } else { spec.audio.mic_volume };
                     audio_parts.push(format!("{} ! {enc} bitrate={kb} ! aacparse ! queue ! mux.", src(dev, vol)));
                 }
@@ -369,20 +410,53 @@ fn gst_video_encoder(spec: &PipelineSpec, gst: &GstInfo, w: u32, h: u32, kbps: u
         );
     }
     if fam == EncoderFamily::Vaapi && !vaapi.is_empty() && gst.has(vaapi) {
-        return (vec!["vaapipostproc".into(), format!("video/x-raw(memory:VASurface),format=NV12,width={w},height={h}"), format!("{vaapi} rate-control=vbr bitrate={kbps} keyframe-period={gop}"), parse.into()], codec);
+        return (
+            vec![
+                "vaapipostproc".into(),
+                format!("video/x-raw(memory:VASurface),format=NV12,width={w},height={h}"),
+                format!("{vaapi} rate-control=vbr bitrate={kbps} keyframe-period={gop}"),
+                parse.into(),
+            ],
+            codec,
+        );
     }
     if fam == EncoderFamily::Nvenc && gst.has(nv) {
-        return (vec!["videoconvert".into(), "videoscale".into(), format!("video/x-raw,format=NV12,width={w},height={h}"), format!("{nv} rc-mode=vbr bitrate={kbps} gop-size={gop}"), parse.into()], codec);
+        return (
+            vec![
+                "videoconvert".into(),
+                "videoscale".into(),
+                format!("video/x-raw,format=NV12,width={w},height={h}"),
+                format!("{nv} rc-mode=vbr bitrate={kbps} gop-size={gop}"),
+                parse.into(),
+            ],
+            codec,
+        );
     }
     // CPU fallback (always H.264 when the codec's software encoder is missing).
     let (sw, parse, actual) = if !sw.is_empty() && gst.has(sw) { (sw, parse, codec) } else { ("x264enc", "h264parse", Codec::H264) };
-    let opts = if sw == "x264enc" { format!("speed-preset=veryfast bitrate={kbps} key-int-max={gop}") } else { format!("speed-preset=ultrafast bitrate={kbps} key-int-max={gop}") };
-    (vec!["videoconvert".into(), "videoscale".into(), format!("video/x-raw,format=I420,width={w},height={h}"), format!("{sw} {opts}"), parse.into()], actual)
+    let opts = if sw == "x264enc" {
+        format!("speed-preset=veryfast bitrate={kbps} key-int-max={gop}")
+    } else {
+        format!("speed-preset=ultrafast bitrate={kbps} key-int-max={gop}")
+    };
+    (
+        vec![
+            "videoconvert".into(),
+            "videoscale".into(),
+            format!("video/x-raw,format=I420,width={w},height={h}"),
+            format!("{sw} {opts}"),
+            parse.into(),
+        ],
+        actual,
+    )
 }
 
 /// FFmpeg stage that turns the GStreamer Matroska stream into fragmented MP4 (copy only).
 pub fn remux_mkv_to_fmp4_args(frag_ms: u32, hevc: bool) -> Vec<String> {
-    let mut a: Vec<String> = ["-hide_banner", "-loglevel", "warning", "-nostats", "-f", "matroska", "-i", "pipe:0", "-map", "0", "-c", "copy"].map(String::from).to_vec();
+    let mut a: Vec<String> =
+        ["-hide_banner", "-loglevel", "warning", "-nostats", "-f", "matroska", "-i", "pipe:0", "-map", "0", "-c", "copy"]
+            .map(String::from)
+            .to_vec();
     if hevc {
         push(&mut a, ["-tag:v", "hvc1"]);
     }
@@ -414,14 +488,32 @@ mod tests {
         let e = *find(enc).unwrap();
         PipelineSpec {
             backend,
-            monitor: MonitorInfo { index: 1, name: "D".into(), x: 1920, y: 0, width: 2560, height: 1440, primary: false, adapter: 0, output: 1, handle: 65537 },
+            monitor: MonitorInfo {
+                index: 1,
+                name: "D".into(),
+                x: 1920,
+                y: 0,
+                width: 2560,
+                height: 1440,
+                primary: false,
+                adapter: 0,
+                output: 1,
+                handle: 65537,
+            },
             window_exe: None,
             out_size: out,
             fps: 60,
             cursor: true,
             audio: AudioConfig::default(),
             encoder: e,
-            video: VideoParams { codec: e.codec, profile: QualityProfile::Balanced, width: out.0, height: out.1, fps: 60, keyint_secs: 2.0 },
+            video: VideoParams {
+                codec: e.codec,
+                profile: QualityProfile::Balanced,
+                width: out.0,
+                height: out.1,
+                fps: 60,
+                keyint_secs: 2.0,
+            },
             hw: HwContext::default(),
             audio_kbps: 160,
             frag_ms: 500,
@@ -482,7 +574,11 @@ mod tests {
         assert_eq!(resolve_backend(BackendKind::Test, &f, None, DisplayServer::Unknown).unwrap(), BackendKind::Test);
         assert!(resolve_backend(BackendKind::Auto, &f, None, DisplayServer::Unknown).is_err());
         if cfg!(windows) {
-            assert_eq!(resolve_backend(BackendKind::Auto, &f, None, DisplayServer::Windows).unwrap(), BackendKind::Dda, "falls back to DDA without gfxcapture");
+            assert_eq!(
+                resolve_backend(BackendKind::Auto, &f, None, DisplayServer::Windows).unwrap(),
+                BackendKind::Dda,
+                "falls back to DDA without gfxcapture"
+            );
         }
         let gst = GstInfo { launch: "gst-launch-1.0".into(), elements: ["pipewiresrc".to_string()].into_iter().collect() };
         if cfg!(target_os = "linux") {
@@ -501,7 +597,10 @@ mod tests {
         let a = a.join(" ");
         assert_eq!(codec, Codec::Hevc);
         assert!(a.starts_with("-q -e pipewiresrc fd=3 path=42"), "{a}");
-        assert!(a.contains("vapostproc ! video/x-raw(memory:VAMemory),format=NV12,width=1920,height=1080 ! vah265enc rate-control=vbr"), "{a}");
+        assert!(
+            a.contains("vapostproc ! video/x-raw(memory:VAMemory),format=NV12,width=1920,height=1080 ! vah265enc rate-control=vbr"),
+            "{a}"
+        );
         assert!(a.contains("matroskamux name=mux streamable=true ! fdsink fd=1"));
         assert!(a.contains("pulsesrc device=@DEFAULT_MONITOR@") && a.contains("avenc_aac bitrate=160000"), "{a}");
         // Unknown encoder family → x264 fallback

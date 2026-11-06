@@ -149,7 +149,19 @@ mod tests {
     /// engine does), feed it through demuxer + buffer, export, and validate with ffprobe.
     fn encode_into(buf: &mut ReplayBuffer, ff: &Path, seconds: u32) {
         let mut child = Command::new(ff)
-            .args(["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc2=size=640x360:rate=30", "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000"])
+            .args([
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-f",
+                "lavfi",
+                "-i",
+                "testsrc2=size=640x360:rate=30",
+                "-f",
+                "lavfi",
+                "-i",
+                "sine=frequency=440:sample_rate=48000",
+            ])
             .args(["-t", &seconds.to_string(), "-c:v", "libx264", "-preset", "ultrafast", "-g", "60", "-c:a", "aac", "-b:a", "96k"])
             .args(["-f", "mp4", "-movflags", "+frag_keyframe+empty_moov+default_base_moof", "-frag_duration", "500000", "pipe:1"])
             .stdout(Stdio::piped())
@@ -196,7 +208,12 @@ mod tests {
             let (dur, streams) = ffprobe_duration(&dest);
             assert!((8.0..=10.2).contains(&dur), "duration {dur}");
             assert_eq!(streams, 2, "video + audio");
-            let leftovers: Vec<_> = std::fs::read_dir(dir.path()).unwrap().filter_map(|e| e.ok()).map(|e| e.file_name().to_string_lossy().into_owned()).filter(|n| n.starts_with('.')).collect();
+            let leftovers: Vec<_> = std::fs::read_dir(dir.path())
+                .unwrap()
+                .filter_map(|e| e.ok())
+                .map(|e| e.file_name().to_string_lossy().into_owned())
+                .filter(|n| n.starts_with('.'))
+                .collect();
             assert!(leftovers.is_empty(), "temp files left: {leftovers:?}");
         }
     }
