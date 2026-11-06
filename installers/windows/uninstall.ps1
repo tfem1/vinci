@@ -12,7 +12,7 @@ function Uninstall-Vinci {
     $installDir = Join-Path $env:LOCALAPPDATA 'vinci'
     Get-Process -Name 'vinci', 'vinci-cli' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 
-    # Archive install (install.ps1): program files only — data/ and cache/ stay unless purging.
+    # Archive install (install.ps1): program files only - data/ and cache/ stay unless purging.
     foreach ($f in 'vinci.exe', 'vinci-cli.exe', 'ffmpeg.exe', 'ffprobe.exe', 'FFMPEG-LICENSE.txt', 'LICENSE', 'THIRD_PARTY_NOTICES.md') {
         Remove-Item -Force (Join-Path $installDir $f) -ErrorAction SilentlyContinue
     }

@@ -75,6 +75,12 @@ jobs:
       - name: Smoke test install.sh against the archive (local mirror)
         if: runner.os == 'Linux'
         run: scripts/test-install-local.sh release-dist ${{ matrix.target }}
+      - name: Smoke test install.ps1 against the archive (local mirror)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          powershell -ExecutionPolicy Bypass -File .\scripts\test-install-local.ps1 -Dist release-dist -Target ${{ matrix.target }}
+          if ($LASTEXITCODE -ne 0) { exit 1 }
       - uses: actions/upload-artifact@v4
         with:
           name: archive-${{ matrix.target }}
@@ -107,6 +113,9 @@ jobs:
   publish:
     name: Publish GitHub release
     needs: build
+    # Publish even if an optional target failed (e.g. linux-arm64): the required
+    # archives are checked below, and install.sh reports a missing build clearly.
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -121,9 +130,10 @@ jobs:
           CHANNEL=stable; case "$TAG" in *-*) CHANNEL=beta ;; esac
           echo "CHANNEL=$CHANNEL" >> "$GITHUB_ENV"
           scripts/package-release.sh "${TAG#v}" artifacts release-assets "$CHANNEL"
-          for a in vinci-linux-x86_64.tar.gz vinci-linux-arm64.tar.gz vinci-windows-x86_64.zip install.sh install.ps1 SHA256SUMS; do
+          for a in vinci-linux-x86_64.tar.gz vinci-windows-x86_64.zip install.sh install.ps1 SHA256SUMS; do
             test -f "release-assets/$a" || { echo "required asset missing: $a"; exit 1; }
           done
+          test -f release-assets/vinci-linux-arm64.tar.gz || echo "::warning::linux-arm64 build missing from this release"
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}

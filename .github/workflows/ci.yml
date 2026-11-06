@@ -133,6 +133,14 @@ jobs:
           if (-not (Test-Path "$env:LOCALAPPDATA\vinci\ffmpeg.exe")) { exit 1 }
           $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
           if ($userPath -notlike "*$env:LOCALAPPDATA\vinci*") { Write-Error "PATH not updated"; exit 1 }
+      - name: Package + install.ps1 against the result (local mirror)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          powershell -ExecutionPolicy Bypass -File .\scripts\package-archive.ps1 -Target windows-x86_64 -Out release-dist
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          powershell -ExecutionPolicy Bypass -File .\scripts\test-install-local.ps1 -Dist release-dist -Target windows-x86_64
+          if ($LASTEXITCODE -ne 0) { exit 1 }
       - name: install-from-source.ps1 is idempotent (PATH entry not duplicated)
         if: runner.os == 'Windows'
         shell: powershell

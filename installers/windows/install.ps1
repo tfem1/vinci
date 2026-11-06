@@ -1,6 +1,6 @@
 <#
 =============================================================================
- VINCI — Capture Every Moment — installer for Windows 10/11 (x64, ARM64)
+ VINCI - Capture Every Moment - installer for Windows 10/11 (x64, ARM64)
 
    irm https://github.com/tfem1/vinci/releases/latest/download/install.ps1 | iex
 
@@ -9,9 +9,9 @@
 
  Optional environment variables (set them before running the line above):
    $env:VINCI_VERSION  = "v0.2.0"   install that release instead of the latest
-   $env:VINCI_BASE_URL = "https://…" download the release assets from a mirror
+   $env:VINCI_BASE_URL = "https://..." download the release assets from a mirror
 
- Execution policy: the `irm … | iex` form is not affected by the execution
+ Execution policy: the `irm ... | iex` form is not affected by the execution
  policy. If you saved this file and PowerShell says "running scripts is
  disabled on this system", run it for this one process only with:
    powershell -ExecutionPolicy Bypass -File .\install.ps1
@@ -104,7 +104,7 @@ function Install-Vinci {
         $code = Get-Asset "$base/SHA256SUMS" $sums
         if ($code -eq 404) {
             if ($version -eq 'latest' -and -not $env:VINCI_BASE_URL) {
-                Stop-Install ("no published release found for $Repo (…/releases/latest returned 404).`n" +
+                Stop-Install ("no published release found for $Repo (.../releases/latest returned 404).`n" +
                     "  Releases appear after a version tag is built by CI. Until then, build from source:`n    $FromSource")
             }
             Stop-Install "release '$version' not found at $base (SHA256SUMS returned 404)."
