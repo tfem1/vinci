@@ -39,7 +39,9 @@ impl PortalSession {
                     use ashpd::desktop::screencast::{CursorMode, Screencast, SourceType};
                     use ashpd::desktop::PersistMode;
                     let run = async {
-                        let proxy = Screencast::new().await.map_err(|e| e.to_string())?;
+                        let proxy = Screencast::new()
+                            .await
+                            .map_err(|e| format!("no screen-sharing service (xdg-desktop-portal) answered ({e})"))?;
                         let session = proxy.create_session().await.map_err(|e| e.to_string())?;
                         let cursor_mode = if cursor { CursorMode::Embedded } else { CursorMode::Hidden };
                         proxy
@@ -53,12 +55,13 @@ impl PortalSession {
                             )
                             .await
                             .map_err(|e| e.to_string())?;
-                        let response = proxy
-                            .start(&session, None)
-                            .await
-                            .map_err(|e| e.to_string())?
-                            .response()
-                            .map_err(|e| format!("screen sharing was not allowed ({e})"))?;
+                        let response = proxy.start(&session, None).await.map_err(|e| e.to_string())?.response().map_err(|e| {
+                            if e.to_string().contains("Cancelled") {
+                                "screen sharing was cancelled by the user".to_string()
+                            } else {
+                                format!("the desktop's screen-sharing service failed ({e})")
+                            }
+                        })?;
                         let stream = response.streams().first().ok_or("the portal returned no stream")?.clone();
                         let token = response.restore_token().map(String::from);
                         let fd = proxy.open_pipe_wire_remote(&session).await.map_err(|e| e.to_string())?;

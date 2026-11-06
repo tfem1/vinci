@@ -257,6 +257,9 @@ fn run(engine: &Engine, cmd: Cmd) -> i32 {
                 let st = engine.status();
                 if st.state == vinci_engine::ReplayState::Error {
                     eprintln!("error: {}", st.message.unwrap_or_default());
+                    if let Some(fix) = st.fix_command {
+                        eprintln!("fix:   {fix}");
+                    }
                     return 1;
                 }
                 if let Some(after) = save_after {

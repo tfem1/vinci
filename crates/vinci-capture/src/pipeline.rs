@@ -642,4 +642,83 @@ mod tests {
         let r = remux_mkv_to_fmp4_args(500, true).join(" ");
         assert!(r.contains("-f matroska -i pipe:0 -map 0 -c copy -tag:v hvc1 -f mp4"));
     }
+
+    /// The Wayland capture pipeline, exactly as built for the portal, fed by a real
+    /// PipeWire video node instead of the portal's fd (the portal hands VINCI a
+    /// PipeWire remote; everything after `pipewiresrc` is identical).
+    /// Run by `scripts/test-wayland-pipeline.sh`, which starts PipeWire and a
+    /// green test-pattern node and sets `VINCI_TEST_PW_NODE`.
+    #[test]
+    fn real_pipewire_stream_to_fmp4() {
+        let Some(node) = std::env::var("VINCI_TEST_PW_NODE").ok().and_then(|v| v.parse::<u32>().ok()) else {
+            eprintln!("skipped: VINCI_TEST_PW_NODE not set (see scripts/test-wayland-pipeline.sh)");
+            return;
+        };
+        use std::io::{Read, Write};
+        use std::process::{Command, Stdio};
+        let gst = vinci_hw::gstreamer::detect().expect("GStreamer");
+        let deps = crate::deps::PortalDeps::check(Some(&gst));
+        assert!(deps.video_ok(), "missing {:?}", deps.video);
+        let ff = vinci_hw::ffmpeg::locate(None).expect("FFmpeg");
+        let mut sp = spec(BackendKind::Portal, "libx264", (1280, 720));
+        sp.fps = 30;
+        sp.video.fps = 30;
+        sp.audio = AudioConfig { system: false, microphone: false, ..AudioConfig::default() };
+        let (args, codec) = gst_portal_args(&sp, &gst, 3, node);
+        assert_eq!(codec, Codec::H264);
+        // No portal fd here: connect to the session's PipeWire daemon instead.
+        let args: Vec<String> = args.into_iter().filter(|a| a != "fd=3").collect();
+        let mut g = Command::new(&gst.launch).args(&args).stdout(Stdio::piped()).stderr(Stdio::inherit()).spawn().unwrap();
+        let mut f = Command::new(&ff.path)
+            .args(remux_mkv_to_fmp4_args(500, false))
+            .stdin(Stdio::from(g.stdout.take().unwrap()))
+            .stdout(Stdio::piped())
+            .stderr(Stdio::inherit())
+            .spawn()
+            .unwrap();
+        let mut out = f.stdout.take().unwrap();
+        let mut demux = vinci_replay::Fmp4Demuxer::new();
+        let (mut events, mut inits, mut frags, mut media) = (Vec::new(), 0, 0, 0.0);
+        let mut raw = Vec::new();
+        let mut buf = vec![0u8; 64 * 1024];
+        let t0 = std::time::Instant::now();
+        while t0.elapsed() < std::time::Duration::from_secs(6) {
+            let n = out.read(&mut buf).unwrap();
+            if n == 0 {
+                break;
+            }
+            raw.extend_from_slice(&buf[..n]);
+            demux.push(&buf[..n], &mut events).unwrap();
+            for e in events.drain(..) {
+                match e {
+                    vinci_replay::Fmp4Event::Init { .. } => inits += 1,
+                    vinci_replay::Fmp4Event::Fragment(fr) => {
+                        frags += 1;
+                        media += fr.duration;
+                    }
+                }
+            }
+        }
+        let _ = g.kill();
+        let _ = f.kill();
+        let _ = (g.wait(), f.wait());
+        assert_eq!(inits, 1, "one init segment");
+        assert!(frags >= 6 && media >= 3.0, "{frags} fragments, {media:.2} s of video");
+        // Decode one frame: it must be the green test pattern served over PipeWire.
+        let dir = std::env::temp_dir().join(format!("vinci-pw-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let mp4 = dir.join("stream.mp4");
+        std::fs::File::create(&mp4).unwrap().write_all(&raw).unwrap();
+        let px = Command::new(&ff.path)
+            .args(["-v", "error", "-i"])
+            .arg(&mp4)
+            .args(["-vf", "select=eq(n\\,20),scale=1:1", "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"])
+            .output()
+            .unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(px.stdout.len(), 3, "{}", String::from_utf8_lossy(&px.stderr));
+        let (r, gr, b) = (px.stdout[0], px.stdout[1], px.stdout[2]);
+        assert!(gr > 200 && r < 40 && b < 40, "frame colour rgb({r},{gr},{b}) is not the green source");
+        eprintln!("PipeWire → GStreamer (x264) → FFmpeg remux → fMP4: {frags} fragments, {media:.1} s, rgb({r},{gr},{b})");
+    }
 }

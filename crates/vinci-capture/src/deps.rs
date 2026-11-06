@@ -111,6 +111,37 @@ pub fn install_command(elements: &[&str], d: DistroFamily) -> Option<String> {
     Some(format!("{cmd} {}", pkgs.join(" ")))
 }
 
+/// Package of the xdg-desktop-portal backend implementing ScreenCast for a desktop
+/// (`XDG_CURRENT_DESKTOP`), e.g. `xdg-desktop-portal-kde` on Plasma.
+pub fn portal_backend_package(desktop: &str) -> &'static str {
+    let d = desktop.to_lowercase();
+    if d.contains("kde") {
+        "xdg-desktop-portal-kde"
+    } else if d.contains("gnome") || d.contains("unity") || d.contains("budgie") {
+        "xdg-desktop-portal-gnome"
+    } else if d.contains("hyprland") {
+        "xdg-desktop-portal-hyprland"
+    } else if d.contains("cosmic") {
+        "xdg-desktop-portal-cosmic"
+    } else {
+        // sway, river, niri (wlroots-based and others)
+        "xdg-desktop-portal-wlr"
+    }
+}
+
+/// Command that installs xdg-desktop-portal and the backend for this desktop.
+pub fn portal_install_command(desktop: &str, d: DistroFamily) -> Option<String> {
+    let backend = portal_backend_package(desktop);
+    let cmd = match d {
+        DistroFamily::Arch => "sudo pacman -S --needed",
+        DistroFamily::Debian => "sudo apt install",
+        DistroFamily::Fedora => "sudo dnf install",
+        DistroFamily::Suse => "sudo zypper install",
+        DistroFamily::Other => return None,
+    };
+    Some(format!("{cmd} xdg-desktop-portal {backend}"))
+}
+
 /// Human description of what is missing, naming the packages when the distribution
 /// is unknown (no command can be given then).
 pub fn describe_missing(elements: &[&str]) -> String {
@@ -179,6 +210,18 @@ mod tests {
         assert!(d.video_ok() && d.audio_ok());
         assert_eq!(install_command(&d.all(), DistroFamily::Arch), None);
         assert_eq!(install_command(&["pipewiresrc"], DistroFamily::Other), None);
+    }
+
+    #[test]
+    fn portal_backend_per_desktop() {
+        assert_eq!(portal_backend_package("KDE"), "xdg-desktop-portal-kde");
+        assert_eq!(portal_backend_package("ubuntu:GNOME"), "xdg-desktop-portal-gnome");
+        assert_eq!(portal_backend_package("Hyprland"), "xdg-desktop-portal-hyprland");
+        assert_eq!(portal_backend_package("sway"), "xdg-desktop-portal-wlr");
+        assert_eq!(
+            portal_install_command("KDE", DistroFamily::Arch).unwrap(),
+            "sudo pacman -S --needed xdg-desktop-portal xdg-desktop-portal-kde"
+        );
     }
 
     #[test]

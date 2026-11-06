@@ -38,7 +38,8 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev \
             build-essential patchelf ffmpeg xvfb x11-utils xdotool pulseaudio pulseaudio-utils dbus-x11 \
-            gstreamer1.0-tools gstreamer1.0-plugins-good gstreamer1.0-pipewire shellcheck
+            gstreamer1.0-tools gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly gstreamer1.0-pipewire \
+            pipewire wireplumber shellcheck
       - uses: dtolnay/rust-toolchain@stable
         with: { components: "rustfmt, clippy" }
       - uses: Swatinem/rust-cache@v2
@@ -53,6 +54,8 @@ jobs:
         run: cargo test --workspace
       - name: End-to-end — X11 capture, PulseAudio, global hotkey, instant save
         run: scripts/e2e-linux.sh
+      - name: Wayland pipeline — real PipeWire stream → GStreamer → fMP4 (no portal)
+        run: scripts/test-wayland-pipeline.sh
       - name: Installer lint
         run: shellcheck -S warning installers/linux/install.sh scripts/*.sh
 

@@ -89,8 +89,18 @@ impl From<CaptureError> for StartError {
             CaptureError::NoMonitor => {
                 Self { message: "no screen to record was found. On Wayland, set Capture → Source to Automatic.".into(), fix: None }
             }
-            CaptureError::Portal(m) if m.contains("not allowed") || m.contains("Cancelled") || m.contains("cancelled") => {
+            CaptureError::Portal(m) if m.contains("cancelled by the user") => {
                 Self { message: "screen sharing was refused in the system dialog. Click Retry and choose your screen.".into(), fix: None }
+            }
+            CaptureError::Portal(m) if m.contains("no screen-sharing service") || m.contains("service failed") => {
+                let desktop = std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default();
+                Self {
+                    message: format!(
+                        "{m}. Screen capture on Wayland goes through xdg-desktop-portal and your desktop's backend ({}).",
+                        vinci_capture::deps::portal_backend_package(&desktop)
+                    ),
+                    fix: vinci_capture::deps::portal_install_command(&desktop, vinci_hw::system::distro_family()),
+                }
             }
             other => Self { message: other.to_string(), fix: None },
         }
