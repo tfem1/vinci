@@ -2,6 +2,7 @@
 //! crate only wires it to windows, the tray, the overlay and OS integration.
 
 mod commands;
+mod media_server;
 mod overlay;
 
 use parking_lot::Mutex;
@@ -14,6 +15,8 @@ use vinci_engine::{Engine, EngineEvent, ReplayState};
 pub struct AppState {
     pub engine: Engine,
     pub hotkeys: Arc<Mutex<Option<vinci_hotkeys::HotkeyStatus>>>,
+    /// Loopback HTTP server for the in-app player (see `media_server`).
+    pub media: Option<media_server::MediaServer>,
 }
 
 /// Command-line actions, usable from desktop shortcuts or compositor key bindings
@@ -235,7 +238,11 @@ pub fn run() {
         .setup(move |app| {
             let engine = Engine::new(paths.clone()).map_err(|e| Box::new(std::io::Error::other(e.to_string())))?;
             let hotkeys = Arc::new(Mutex::new(None));
-            app.manage(AppState { engine: engine.clone(), hotkeys: hotkeys.clone() });
+            let resolver_engine = engine.clone();
+            let media = media_server::start(move |id| resolver_engine.clip(id).ok().map(|c| c.path))
+                .map_err(|e| log::error!("media server unavailable: {e}"))
+                .ok();
+            app.manage(AppState { engine: engine.clone(), hotkeys: hotkeys.clone(), media });
             overlay::init(app.handle());
             allow_asset_dirs(app.handle());
             build_tray(app.handle())?;
@@ -321,6 +328,7 @@ pub fn run() {
             commands::set_autostart,
             commands::preview_overlay,
             commands::pick_folder,
+            commands::media_url,
         ])
         .build(tauri::generate_context!())
         .expect("error while building VINCI");

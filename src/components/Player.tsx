@@ -25,6 +25,17 @@ export function Player({ clip: initial, onClose }: { clip: Clip; onClose: () => 
   const [videoError, setVideoError] = useState(false);
   const [videoKey, setVideoKey] = useState(0);
   const video = useRef<HTMLVideoElement>(null);
+  const [src, setSrc] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    let alive = true;
+    api
+      .mediaUrl(clip.id)
+      .then((u) => alive && setSrc(u ?? fileSrc(clip.path)))
+      .catch(() => alive && setSrc(fileSrc(clip.path)));
+    return () => {
+      alive = false;
+    };
+  }, [clip.id, clip.path, videoKey]);
   const menuRef = useClickOutside(menu, () => setMenu(false));
 
   useEffect(
@@ -103,7 +114,7 @@ export function Player({ clip: initial, onClose }: { clip: Clip; onClose: () => 
       <div className="modal-body">
         <div className="video-wrap">
           {!videoError ? (
-            <video key={videoKey} ref={video} src={fileSrc(clip.path)} controls autoPlay preload="metadata" onError={() => setVideoError(true)} />
+            src && <video key={videoKey} ref={video} src={src} controls autoPlay preload="metadata" onError={() => setVideoError(true)} />
           ) : (
             <div className="fallback">
               <b style={{ color: "var(--text)" }}>This clip can't be previewed here</b>

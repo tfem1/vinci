@@ -274,3 +274,9 @@ pub async fn pick_folder(app: AppHandle, title: String) -> CmdResult<Option<Stri
     });
     blocking(move || rx.recv().map_err(e)).await
 }
+
+/// URL the in-app player streams a clip from (loopback HTTP, token-protected).
+#[tauri::command]
+pub fn media_url(state: State<AppState>, id: i64) -> Option<String> {
+    state.media.as_ref().map(|m| m.clip_url(id))
+}

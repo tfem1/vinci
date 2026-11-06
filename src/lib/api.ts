@@ -61,6 +61,7 @@ export const api = {
   setAutostart: (enabled: boolean) => invoke<void>("set_autostart", { enabled }),
   previewOverlay: () => invoke<void>("preview_overlay"),
   pickFolder: (title: string) => invoke<string | null>("pick_folder", { title }),
+  mediaUrl: (id: number) => invoke<string | null>("media_url", { id }),
 };
 
 /** Subscribe to engine events. Returns an unsubscribe function. */

@@ -129,7 +129,16 @@ the session and the next one is used; the UI shows why.
   instead of buffering gigabytes of raw video.
 * Capture helper priority: above normal on Windows (avoids stutter when the game pegs the CPU).
 
-## 9. Security & privacy
+## 9. In-app playback
+
+WebKitGTK cannot stream `<video>` from Tauri's custom `asset://` scheme (it reports a
+`FormatError`, although GStreamer decodes the same file over `file://` and `http://`).
+The player therefore streams from a tiny loopback HTTP server inside VINCI
+(`src-tauri/src/media_server.rs`): bound to `127.0.0.1` on a random port, every URL carries
+a 128-bit random token, clips are addressed **by library id** (no paths → no traversal),
+and `Range` requests give instant seeking. Thumbnails still use `asset://`.
+
+## 10. Security & privacy
 
 * No network access except the optional, signed update check (once a day, can be disabled).
 * Updates: Ed25519 signature over the manifest + SHA-256 per installer; refuses to install
