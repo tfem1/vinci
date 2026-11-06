@@ -122,7 +122,8 @@ fn remux(ffmpeg: &Path, parts: &[PathBuf], tmp: &Path, dir: &Path, stem: &str, m
         return Err(io::Error::other(String::from_utf8_lossy(&out.stderr).trim().chars().take(400).collect::<String>()));
     }
     // fsync the result before publishing it
-    File::open(tmp)?.sync_all()?;
+    // Write access: Windows refuses FlushFileBuffers on a read-only handle (os error 5).
+    std::fs::OpenOptions::new().write(true).open(tmp)?.sync_all()?;
     Ok(())
 }
 

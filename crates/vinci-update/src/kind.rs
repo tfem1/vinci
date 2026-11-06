@@ -121,7 +121,7 @@ pub fn apply(kind: &InstallKind, file: &Path) -> Result<ApplyOutcome, UpdateErro
                 use std::os::unix::fs::PermissionsExt;
                 std::fs::set_permissions(&new, std::fs::Permissions::from_mode(0o755))?;
             }
-            std::fs::File::open(&new)?.sync_all()?;
+            std::fs::OpenOptions::new().write(true).open(&new)?.sync_all()?;
             std::fs::rename(&new, path)?;
             let _ = std::fs::remove_file(file);
             Ok(ApplyOutcome::Restart { exec: path.clone() })

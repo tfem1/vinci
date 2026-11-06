@@ -193,7 +193,8 @@ pub fn move_file(src: &Path, dst: &Path) -> io::Result<()> {
         Err(_) => {
             let tmp = dst.with_file_name(format!(".{}.vinci-move", dst.file_name().and_then(|n| n.to_str()).unwrap_or("file")));
             fs::copy(src, &tmp)?;
-            File::open(&tmp)?.sync_all()?;
+            // Write access: Windows refuses to flush a read-only handle (os error 5).
+            fs::OpenOptions::new().write(true).open(&tmp)?.sync_all()?;
             fs::rename(&tmp, dst)?;
             fs::remove_file(src)
         }

@@ -145,8 +145,20 @@ fn run(engine: &Engine, cmd: Cmd) -> i32 {
                 ),
                 None => println!("FFmpeg   NOT FOUND — {}", r.ffmpeg_error.clone().unwrap_or_default()),
             }
-            if let Some(g) = &r.gstreamer {
-                println!("GStreamer pipewiresrc: {}", yn(g.has("pipewiresrc")));
+            if cfg!(target_os = "linux") {
+                let deps = vinci_capture::deps::PortalDeps::check(r.gstreamer.as_ref());
+                match &r.gstreamer {
+                    Some(g) => println!("GStreamer {} — pipewiresrc: {}", g.launch.display(), yn(g.has("pipewiresrc"))),
+                    None => println!("GStreamer NOT FOUND (gst-launch-1.0 / gst-inspect-1.0 not in PATH)"),
+                }
+                if deps.video_ok() && deps.audio_ok() {
+                    println!("Wayland capture: ready");
+                } else {
+                    println!("Wayland capture: missing {}", deps.all().join(", "));
+                    if let Some(cmd) = vinci_capture::deps::install_command(&deps.all(), vinci_hw::system::distro_family()) {
+                        println!("  fix: {cmd}");
+                    }
+                }
             }
             println!("\nEncoders (validated with a real test encode):");
             for p in &hw.probes {
