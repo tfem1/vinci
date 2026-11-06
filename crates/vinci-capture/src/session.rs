@@ -215,6 +215,16 @@ impl CaptureSession {
             }
             let (args, actual_codec) = gst_portal_args(&spec, gst, pw_fd.map(|_| 3), node_id);
             info.codec = actual_codec;
+            // Report the encoder GStreamer really runs (it falls back to x264 on the CPU
+            // when the GPU element for the validated FFmpeg encoder is missing).
+            if args.iter().any(|a| a == "x264enc") {
+                info.encoder = "libx264".into();
+            } else if args.iter().any(|a| a == "x265enc") {
+                info.encoder = "libx265".into();
+            }
+            if args.iter().any(|a| a == "cudaupload") {
+                log::info!("Wayland encoding: {} with GPU colour conversion (CUDA)", info.encoder);
+            }
             log::info!("capture: {} {}", gst.launch.display(), args.join(" "));
             let mut g = vinci_hw::process::command(&gst.launch);
             g.args(&args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());

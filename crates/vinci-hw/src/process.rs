@@ -57,3 +57,22 @@ pub fn run_capture(cmd: &mut Command) -> std::io::Result<(bool, String, String)>
     let out = cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).output()?;
     Ok((out.status.success(), String::from_utf8_lossy(&out.stdout).into_owned(), String::from_utf8_lossy(&out.stderr).into_owned()))
 }
+
+/// Run to completion with a deadline (the child is killed when it is exceeded).
+/// `Ok(true)` when it exited successfully in time.
+pub fn run_with_timeout(cmd: &mut Command, timeout: std::time::Duration) -> std::io::Result<bool> {
+    use std::process::Stdio;
+    let mut child = cmd.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn()?;
+    let end = std::time::Instant::now() + timeout;
+    loop {
+        if let Some(st) = child.try_wait()? {
+            return Ok(st.success());
+        }
+        if std::time::Instant::now() >= end {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Ok(false);
+        }
+        std::thread::sleep(std::time::Duration::from_millis(25));
+    }
+}

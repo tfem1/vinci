@@ -682,10 +682,21 @@ impl Engine {
             }
             self.0.sampler.lock().set_tracked_pids(&session.pids());
             let stdout = session.take_stdout();
+            let note = if session.info.encoder != spec.encoder.id
+                && session.info.encoder.starts_with("lib")
+                && spec.encoder.family != vinci_encoding::EncoderFamily::Software
+            {
+                Some(format!(
+                    "Encoding on the CPU ({}): GStreamer has no element for {} — install your distribution's GStreamer \"bad\" plugins (NVENC/VA-API) for GPU encoding.",
+                    session.info.encoder, spec.encoder.label
+                ))
+            } else {
+                note.clone()
+            };
             {
                 let mut st = self.0.status.lock();
                 st.session = Some(session.info.clone());
-                st.fallback_note = note.clone();
+                st.fallback_note = note;
             }
             *slot.lock() = Some(session);
             if stop.load(Ordering::SeqCst) {

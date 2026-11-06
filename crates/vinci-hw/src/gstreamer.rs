@@ -8,10 +8,14 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct GstInfo {
     pub launch: PathBuf,
     pub elements: BTreeSet<String>,
+    /// NVIDIA: a real test encode through `cudaupload ! cudaconvertscale ! nvh264enc`
+    /// succeeded, so colour conversion and scaling can run on the GPU.
+    #[serde(default)]
+    pub cuda_nvenc: bool,
 }
 
 /// Elements VINCI cares about — used to keep the cached list small.
@@ -48,6 +52,7 @@ pub const INTERESTING: &[&str] = &[
     "vapostproc",
     "cudaupload",
     "cudaconvert",
+    "cudaconvertscale",
     "fdsink",
     "matroskamux",
     "vaapipostproc",
@@ -114,7 +119,51 @@ pub fn detect() -> Option<GstInfo> {
         elements.len(),
         if missing.is_empty() { "none".into() } else { missing.join(", ") }
     );
-    Some(GstInfo { launch, elements })
+    let cuda_nvenc = probe_cuda_nvenc(&launch, &elements);
+    Some(GstInfo { launch, elements, cuda_nvenc })
+}
+
+/// Real test encode through the NVIDIA GPU path (CUDA upload + conversion → NVENC).
+/// Memoised per process: it takes ~0.5–1 s.
+fn probe_cuda_nvenc(launch: &std::path::Path, elements: &BTreeSet<String>) -> bool {
+    use std::sync::Mutex;
+    const NEED: [&str; 3] = ["cudaupload", "cudaconvertscale", "nvh264enc"];
+    if !NEED.iter().all(|e| elements.contains(*e)) {
+        return false;
+    }
+    static CACHE: Mutex<Option<(PathBuf, bool)>> = Mutex::new(None);
+    if let Some((p, ok)) = CACHE.lock().ok().and_then(|c| c.clone()) {
+        if p == launch {
+            return ok;
+        }
+    }
+    let mut c = command(launch);
+    c.args([
+        "-q",
+        "videotestsrc",
+        "num-buffers=30",
+        "!",
+        "video/x-raw,format=BGRx,width=640,height=360,framerate=30/1",
+        "!",
+        "cudaupload",
+        "!",
+        "cudaconvertscale",
+        "!",
+        "video/x-raw(memory:CUDAMemory),format=NV12,width=640,height=360",
+        "!",
+        "nvh264enc",
+        "!",
+        "h264parse",
+        "!",
+        "fakesink",
+    ]);
+    let t0 = std::time::Instant::now();
+    let ok = crate::process::run_with_timeout(&mut c, std::time::Duration::from_secs(15)).unwrap_or(false);
+    log::info!("GStreamer CUDA -> NVENC probe: {} ({} ms)", if ok { "OK" } else { "unavailable" }, t0.elapsed().as_millis());
+    if let Ok(mut cache) = CACHE.lock() {
+        *cache = Some((launch.to_path_buf(), ok));
+    }
+    ok
 }
 
 /// `gst-inspect-1.0 --exists <element>`: exit status 0 when the element is available.

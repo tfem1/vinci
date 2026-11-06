@@ -156,7 +156,11 @@ mod tests {
     use std::path::PathBuf;
 
     fn gst(els: &[&str]) -> GstInfo {
-        GstInfo { launch: PathBuf::from("/usr/bin/gst-launch-1.0"), elements: els.iter().map(|s| s.to_string()).collect::<BTreeSet<_>>() }
+        GstInfo {
+            launch: PathBuf::from("/usr/bin/gst-launch-1.0"),
+            elements: els.iter().map(|s| s.to_string()).collect::<BTreeSet<_>>(),
+            cuda_nvenc: false,
+        }
     }
 
     #[test]

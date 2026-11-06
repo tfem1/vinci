@@ -151,6 +151,22 @@ fn run(engine: &Engine, cmd: Cmd) -> i32 {
                     Some(g) => println!("GStreamer {} — pipewiresrc: {}", g.launch.display(), yn(g.has("pipewiresrc"))),
                     None => println!("GStreamer NOT FOUND (gst-launch-1.0 / gst-inspect-1.0 not in PATH)"),
                 }
+                if let Some(g) = &r.gstreamer {
+                    let nv = hw.probes.iter().any(|p| p.ok && p.id.ends_with("_nvenc"));
+                    let va = hw.probes.iter().any(|p| p.ok && p.id.ends_with("_vaapi"));
+                    let enc = if nv && g.has("nvh264enc") {
+                        if g.cuda_nvenc {
+                            "NVENC, colour conversion on the GPU (CUDA)"
+                        } else {
+                            "NVENC, colour conversion on the CPU"
+                        }
+                    } else if va && g.has("vah264enc") {
+                        "VA-API"
+                    } else {
+                        "x264 on the CPU (no GPU encoder usable from GStreamer)"
+                    };
+                    println!("Wayland encoder: {enc}");
+                }
                 if deps.video_ok() && deps.audio_ok() {
                     println!("Wayland capture: ready");
                 } else {

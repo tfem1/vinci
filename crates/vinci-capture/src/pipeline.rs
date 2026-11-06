@@ -354,6 +354,9 @@ pub fn gst_portal_args(spec: &PipelineSpec, gst: &GstInfo, pipewire_fd: Option<i
     };
     let fd = pipewire_fd.map(|f| format!("fd={f} ")).unwrap_or_default();
     el(format!("pipewiresrc {fd}path={node_id} do-timestamp=true keepalive-time=1000 always-copy=false"));
+    // Ask the compositor for no more frames than we record: KWin/Mutter then skip the
+    // GPU readback of the others (a 144 Hz screen would otherwise cost 2.4× at 60 fps).
+    el(format!("video/x-raw,max-framerate={fps}/1"));
     el("videorate".into());
     el(format!("video/x-raw,framerate={fps}/1"));
     let (elements, actual_codec) = gst_video_encoder(spec, gst, w, h, kbps, gop);
@@ -431,6 +434,19 @@ fn gst_video_encoder(spec: &PipelineSpec, gst: &GstInfo, w: u32, h: u32, kbps: u
                 "vaapipostproc".into(),
                 format!("video/x-raw(memory:VASurface),format=NV12,width={w},height={h}"),
                 format!("{vaapi} rate-control=vbr bitrate={kbps} keyframe-period={gop}"),
+                parse.into(),
+            ],
+            codec,
+        );
+    }
+    if fam == EncoderFamily::Nvenc && gst.has(nv) && gst.cuda_nvenc {
+        // Colour conversion + scaling on the GPU (validated by a real test encode).
+        return (
+            vec![
+                "cudaupload".into(),
+                "cudaconvertscale".into(),
+                format!("video/x-raw(memory:CUDAMemory),format=NV12,width={w},height={h}"),
+                format!("{nv} rc-mode=vbr bitrate={kbps} gop-size={gop}"),
                 parse.into(),
             ],
             codec,
@@ -597,13 +613,17 @@ mod tests {
             );
         }
         let full: Vec<String> = crate::deps::PORTAL_VIDEO.iter().map(|s| s.to_string()).collect();
-        let gst = GstInfo { launch: "gst-launch-1.0".into(), elements: full.into_iter().collect() };
+        let gst = GstInfo { launch: "gst-launch-1.0".into(), elements: full.into_iter().collect(), cuda_nvenc: false };
         if cfg!(target_os = "linux") {
             assert_eq!(resolve_backend(BackendKind::Auto, &f, Some(&gst), DisplayServer::Wayland).unwrap(), BackendKind::Portal);
             // Wayland without the PipeWire plugin: never X11 through XWayland (black / "no monitor found"),
             // but an explanation naming what is missing.
             let f11 = ff(&[], &["x11grab", "lavfi"]);
-            let partial = GstInfo { launch: "gst-launch-1.0".into(), elements: ["videoconvert".to_string()].into_iter().collect() };
+            let partial = GstInfo {
+                launch: "gst-launch-1.0".into(),
+                elements: ["videoconvert".to_string()].into_iter().collect(),
+                cuda_nvenc: false,
+            };
             match resolve_backend(BackendKind::Auto, &f11, Some(&partial), DisplayServer::Wayland) {
                 Err(CaptureError::MissingDeps { message, .. }) => assert!(message.contains("pipewiresrc"), "{message}"),
                 other => panic!("expected MissingDeps, got {other:?}"),
@@ -624,6 +644,7 @@ mod tests {
                 .chain(crate::deps::PORTAL_AUDIO)
                 .map(|s| s.to_string())
                 .collect(),
+            cuda_nvenc: false,
         };
         let sp = spec(BackendKind::Portal, "hevc_vaapi", (1920, 1080));
         let (a, codec) = gst_portal_args(&sp, &gst, Some(3), 42);
@@ -638,10 +659,28 @@ mod tests {
         assert!(a.contains("pulsesrc device=@DEFAULT_MONITOR@") && a.contains("avenc_aac bitrate=160000"), "{a}");
         // Unknown encoder family → x264 fallback
         let sp = spec(BackendKind::Portal, "libx265", (1280, 720));
-        let gst2 = GstInfo { launch: "x".into(), elements: ["pipewiresrc", "x264enc"].iter().map(|s| s.to_string()).collect() };
+        let gst2 =
+            GstInfo { launch: "x".into(), elements: ["pipewiresrc", "x264enc"].iter().map(|s| s.to_string()).collect(), cuda_nvenc: false };
         let (a2, c2) = gst_portal_args(&sp, &gst2, Some(3), 1);
         assert!(a2.join(" ").contains("x264enc speed-preset=veryfast"));
         assert_eq!(c2, Codec::H264, "real codec reported when falling back");
+        assert!(a.contains("! video/x-raw,max-framerate=60/1 ! videorate"), "{a}");
+        // NVIDIA: GPU conversion only when the CUDA probe succeeded.
+        let sp = spec(BackendKind::Portal, "h264_nvenc", (1920, 1080));
+        let mut nv = GstInfo {
+            launch: "x".into(),
+            elements: ["pipewiresrc", "nvh264enc", "cudaupload", "cudaconvertscale", "x264enc"].iter().map(|s| s.to_string()).collect(),
+            cuda_nvenc: true,
+        };
+        let a3 = gst_portal_args(&sp, &nv, None, 7).0.join(" ");
+        assert!(
+            a3.contains("cudaupload ! cudaconvertscale ! video/x-raw(memory:CUDAMemory),format=NV12,width=1920,height=1080 ! nvh264enc"),
+            "{a3}"
+        );
+        assert!(!a3.contains("videoconvert"), "no CPU conversion on the CUDA path: {a3}");
+        nv.cuda_nvenc = false;
+        let a4 = gst_portal_args(&sp, &nv, None, 7).0.join(" ");
+        assert!(a4.contains("videoconvert ! videoscale ! video/x-raw,format=NV12,width=1920,height=1080 ! nvh264enc"), "{a4}");
         let r = remux_mkv_to_fmp4_args(500, true).join(" ");
         assert!(r.contains("-f matroska -i pipe:0 -map 0 -c copy -tag:v hvc1 -f mp4"));
     }
@@ -670,7 +709,7 @@ mod tests {
         // No portal fd: connect to the session's PipeWire daemon, as KWin direct capture does.
         let (args, codec) = gst_portal_args(&sp, &gst, None, node);
         assert_eq!(codec, Codec::H264);
-        assert!(!args.iter().any(|a| a.starts_with("fd=")));
+        assert!(!args.iter().any(|a| a == "fd=3"), "no portal fd: {args:?}");
         let mut g = Command::new(&gst.launch).args(&args).stdout(Stdio::piped()).stderr(Stdio::inherit()).spawn().unwrap();
         let mut f = Command::new(&ff.path)
             .args(remux_mkv_to_fmp4_args(500, false))
