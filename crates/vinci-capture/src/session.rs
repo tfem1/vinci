@@ -34,11 +34,21 @@ pub struct CaptureSession {
     #[cfg(windows)]
     audio: Option<crate::wasapi::AudioPump>,
     #[cfg(target_os = "linux")]
-    _portal: Option<crate::portal::PortalSession>,
+    _wayland: Option<WaylandSource>,
     pub info: SessionInfo,
 }
 
 const TAIL: usize = 60;
+
+/// What feeds `pipewiresrc` on Wayland; kept alive for as long as the capture runs.
+#[cfg(target_os = "linux")]
+#[allow(dead_code)] // held for its Drop (closes the KWin stream / portal session)
+enum WaylandSource {
+    /// KWin direct capture: no dialog, no "screen shared" indicator.
+    Kde(crate::kde::KdeStream),
+    /// xdg-desktop-portal ScreenCast (GNOME, Hyprland, … or when KWin refuses).
+    Portal(crate::portal::PortalSession),
+}
 
 fn apply_priority(cmd: &mut Command, p: Priority) {
     #[cfg(windows)]
@@ -146,7 +156,7 @@ impl CaptureSession {
             #[cfg(windows)]
             audio,
             #[cfg(target_os = "linux")]
-            _portal: None,
+            _wayland: None,
             info,
         })
     }
@@ -164,39 +174,67 @@ impl CaptureSession {
             use std::os::fd::AsRawFd;
             use std::os::unix::process::CommandExt;
             let gst = gst.ok_or_else(|| CaptureError::NoBackend("GStreamer not found".into()))?;
-            let portal = crate::portal::PortalSession::start(spec.portal_restore_token.clone(), spec.cursor)?;
-            info.restore_token = portal.restore_token.clone();
-            if let Some((w, h)) = portal.size {
-                info.monitor = format!("Portal stream {w}×{h}");
-            }
+            // KDE Plasma: ask KWin directly (no screen-sharing dialog or indicator); any
+            // other desktop, or KWin refusing, goes through the portal.
+            let kde = if std::env::var_os("VINCI_NO_KWIN_DIRECT").is_some() {
+                None
+            } else {
+                match crate::kde::KdeStream::start(spec.monitor.index, spec.cursor) {
+                    Ok(k) => k,
+                    Err(e) => {
+                        log::warn!("{e}; using the screen-sharing portal instead");
+                        None
+                    }
+                }
+            };
+            let (node_id, size, pw_fd, source) = match kde {
+                Some(k) => {
+                    log::info!("capture source: KWin direct screencast of {} (node {})", k.output_name, k.node);
+                    info.monitor = match k.size {
+                        Some((w, h)) => format!("{} {w}×{h} · KWin direct", k.output_name),
+                        None => format!("{} · KWin direct", k.output_name),
+                    };
+                    (k.node, k.size, None, WaylandSource::Kde(k))
+                }
+                None => {
+                    let portal = crate::portal::PortalSession::start(spec.portal_restore_token.clone(), spec.cursor)?;
+                    info.restore_token = portal.restore_token.clone();
+                    if let Some((w, h)) = portal.size {
+                        info.monitor = format!("Portal stream {w}×{h}");
+                    }
+                    let fd = portal.fd.as_raw_fd();
+                    (portal.node_id, portal.size, Some(fd), WaylandSource::Portal(portal))
+                }
+            };
             let mut spec = spec.clone();
-            if let Some((w, h)) = portal.size {
+            if let Some((w, h)) = size {
                 let res = vinci_hw_size_fit(spec.out_size, (w.max(2) as u32, h.max(2) as u32));
                 spec.out_size = res;
                 spec.video.width = res.0;
                 spec.video.height = res.1;
             }
-            let (args, actual_codec) = gst_portal_args(&spec, gst, 3, portal.node_id);
+            let (args, actual_codec) = gst_portal_args(&spec, gst, pw_fd.map(|_| 3), node_id);
             info.codec = actual_codec;
             log::info!("capture: {} {}", gst.launch.display(), args.join(" "));
-            let fd = portal.fd.as_raw_fd();
             let mut g = vinci_hw::process::command(&gst.launch);
             g.args(&args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
-            // SAFETY: dup2 is async-signal-safe; it places the PipeWire remote on fd 3
-            // (without CLOEXEC) for `pipewiresrc fd=3`.
-            unsafe {
-                g.pre_exec(move || {
-                    if fd == 3 {
-                        // dup2(3, 3) is a no-op that keeps FD_CLOEXEC: clear it explicitly.
-                        let flags = libc::fcntl(3, libc::F_GETFD);
-                        if flags < 0 || libc::fcntl(3, libc::F_SETFD, flags & !libc::FD_CLOEXEC) < 0 {
+            // SAFETY: dup2 is async-signal-safe; it places the portal's PipeWire remote on
+            // fd 3 (without CLOEXEC) for `pipewiresrc fd=3`.
+            if let Some(fd) = pw_fd {
+                unsafe {
+                    g.pre_exec(move || {
+                        if fd == 3 {
+                            // dup2(3, 3) is a no-op that keeps FD_CLOEXEC: clear it explicitly.
+                            let flags = libc::fcntl(3, libc::F_GETFD);
+                            if flags < 0 || libc::fcntl(3, libc::F_SETFD, flags & !libc::FD_CLOEXEC) < 0 {
+                                return Err(std::io::Error::last_os_error());
+                            }
+                        } else if libc::dup2(fd, 3) < 0 {
                             return Err(std::io::Error::last_os_error());
                         }
-                    } else if libc::dup2(fd, 3) < 0 {
-                        return Err(std::io::Error::last_os_error());
-                    }
-                    Ok(())
-                });
+                        Ok(())
+                    });
+                }
             }
             apply_priority(&mut g, spec.priority);
             let mut gchild = g.spawn().map_err(|e| CaptureError::Spawn(format!("gst-launch-1.0: {e}")))?;
@@ -222,7 +260,7 @@ impl CaptureSession {
                 children: vec![("gstreamer".into(), gchild), ("ffmpeg-remux".into(), fchild)],
                 stdout,
                 stderr_tail: tail,
-                _portal: Some(portal),
+                _wayland: Some(source),
                 info,
             })
         }

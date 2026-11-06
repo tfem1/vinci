@@ -14,3 +14,10 @@ VINCI's own code is MIT-licensed (see `LICENSE`).
   licenses; see `Cargo.lock` / `package-lock.json` for the complete list.
 * **Inter** typeface — SIL Open Font License 1.1 (via `@fontsource-variable/inter`).
 * **Lucide** icons — ISC License.
+
+## KDE screencast protocol
+
+`crates/vinci-capture/protocols/zkde-screencast-unstable-v1.xml` is copied unchanged from
+KDE's plasma-wayland-protocols (SPDX-FileCopyrightText: 2020-2021 Aleix Pol Gonzalez
+<aleixpol@kde.org>, SPDX-License-Identifier: LGPL-2.1-or-later). VINCI generates Rust
+bindings from it at build time to request screen streams from KWin.

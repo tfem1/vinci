@@ -21,6 +21,8 @@ libc.workspace = true
 x11rb.workspace = true
 ashpd.workspace = true
 tokio.workspace = true
+wayland-client.workspace = true
+wayland-scanner.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 windows.workspace = true

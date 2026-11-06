@@ -75,7 +75,23 @@ Icon=vinci
 Terminal=false
 Categories=AudioVideo;Video;Recorder;
 StartupWMClass=vinci
+# KDE Plasma: lets KWin hand VINCI the screen directly (no screen-sharing prompt).
+X-KDE-Wayland-Interfaces=zkde_screencast_unstable_v1
 DESKTOP
+# Same permission for the command-line engine (hidden from the menu).
+cat >"$share/applications/vinci-cli.desktop" <<DESKTOP
+[Desktop Entry]
+Type=Application
+Name=VINCI (command line)
+Exec=$bin_dir/vinci-cli
+Terminal=true
+NoDisplay=true
+X-KDE-Wayland-Interfaces=zkde_screencast_unstable_v1
+DESKTOP
+# Refresh KDE's application database so KWin sees the entries right away.
+for k in kbuildsycoca6 kbuildsycoca5; do
+  if command -v "$k" >/dev/null 2>&1; then "$k" >/dev/null 2>&1 || true; break; fi
+done
 ok "Installed $bin_dir/vinci and $bin_dir/vinci-cli (+ applications menu entry)"
 
 # Wayland screen capture runs a GStreamer pipeline (crates/vinci-capture/src/deps.rs):

@@ -16,6 +16,8 @@
 pub mod config;
 pub mod deps;
 pub mod devices;
+#[cfg(target_os = "linux")]
+pub mod kde;
 pub mod monitors;
 pub mod pipeline;
 #[cfg(target_os = "linux")]

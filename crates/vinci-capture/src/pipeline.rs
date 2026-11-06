@@ -337,7 +337,9 @@ pub fn wgc_exe_regex(exe: &str) -> String {
 }
 
 /// GStreamer pipeline (Wayland portal) — writes Matroska to stdout.
-pub fn gst_portal_args(spec: &PipelineSpec, gst: &GstInfo, pipewire_fd: i32, node_id: u32) -> (Vec<String>, Codec) {
+/// `pipewire_fd`: the PipeWire remote handed out by the portal (on fd 3), or `None` to
+/// connect to the session's PipeWire daemon (KWin direct capture).
+pub fn gst_portal_args(spec: &PipelineSpec, gst: &GstInfo, pipewire_fd: Option<i32>, node_id: u32) -> (Vec<String>, Codec) {
     let (w, h) = spec.out_size;
     let fps = spec.fps.clamp(10, 240);
     let v = &spec.video;
@@ -350,7 +352,8 @@ pub fn gst_portal_args(spec: &PipelineSpec, gst: &GstInfo, pipewire_fd: i32, nod
         }
         p.extend(s.split_whitespace().map(String::from));
     };
-    el(format!("pipewiresrc fd={pipewire_fd} path={node_id} do-timestamp=true keepalive-time=1000 always-copy=false"));
+    let fd = pipewire_fd.map(|f| format!("fd={f} ")).unwrap_or_default();
+    el(format!("pipewiresrc {fd}path={node_id} do-timestamp=true keepalive-time=1000 always-copy=false"));
     el("videorate".into());
     el(format!("video/x-raw,framerate={fps}/1"));
     let (elements, actual_codec) = gst_video_encoder(spec, gst, w, h, kbps, gop);
@@ -623,7 +626,7 @@ mod tests {
                 .collect(),
         };
         let sp = spec(BackendKind::Portal, "hevc_vaapi", (1920, 1080));
-        let (a, codec) = gst_portal_args(&sp, &gst, 3, 42);
+        let (a, codec) = gst_portal_args(&sp, &gst, Some(3), 42);
         let a = a.join(" ");
         assert_eq!(codec, Codec::Hevc);
         assert!(a.starts_with("-q -e pipewiresrc fd=3 path=42"), "{a}");
@@ -636,7 +639,7 @@ mod tests {
         // Unknown encoder family → x264 fallback
         let sp = spec(BackendKind::Portal, "libx265", (1280, 720));
         let gst2 = GstInfo { launch: "x".into(), elements: ["pipewiresrc", "x264enc"].iter().map(|s| s.to_string()).collect() };
-        let (a2, c2) = gst_portal_args(&sp, &gst2, 3, 1);
+        let (a2, c2) = gst_portal_args(&sp, &gst2, Some(3), 1);
         assert!(a2.join(" ").contains("x264enc speed-preset=veryfast"));
         assert_eq!(c2, Codec::H264, "real codec reported when falling back");
         let r = remux_mkv_to_fmp4_args(500, true).join(" ");
@@ -664,10 +667,10 @@ mod tests {
         sp.fps = 30;
         sp.video.fps = 30;
         sp.audio = AudioConfig { system: false, microphone: false, ..AudioConfig::default() };
-        let (args, codec) = gst_portal_args(&sp, &gst, 3, node);
+        // No portal fd: connect to the session's PipeWire daemon, as KWin direct capture does.
+        let (args, codec) = gst_portal_args(&sp, &gst, None, node);
         assert_eq!(codec, Codec::H264);
-        // No portal fd here: connect to the session's PipeWire daemon instead.
-        let args: Vec<String> = args.into_iter().filter(|a| a != "fd=3").collect();
+        assert!(!args.iter().any(|a| a.starts_with("fd=")));
         let mut g = Command::new(&gst.launch).args(&args).stdout(Stdio::piped()).stderr(Stdio::inherit()).spawn().unwrap();
         let mut f = Command::new(&ff.path)
             .args(remux_mkv_to_fmp4_args(500, false))

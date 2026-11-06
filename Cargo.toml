@@ -15,6 +15,8 @@ homepage = "https://github.com/tfem1/vinci"
 rust-version = "1.82"
 
 [workspace.dependencies]
+wayland-client = "0.31"
+wayland-scanner = "0.31"
 vinci-hw = { path = "crates/vinci-hw" }
 vinci-encoding = { path = "crates/vinci-encoding" }
 vinci-capture = { path = "crates/vinci-capture" }

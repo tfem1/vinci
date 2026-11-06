@@ -518,7 +518,15 @@ impl Engine {
         let display = hw.report.system.display_server;
         let backend = vinci_capture::resolve_backend(s.capture.backend, &ff, hw.report.gstreamer.as_ref(), display)?;
         let monitor = match backend {
-            BackendKind::Test | BackendKind::Portal => MonitorInfo::synthetic(1920, 1080),
+            BackendKind::Test => MonitorInfo::synthetic(1920, 1080),
+            BackendKind::Portal => {
+                // The real size comes from the stream; the index picks the KWin output.
+                let mut m = MonitorInfo::synthetic(1920, 1080);
+                if let CaptureTarget::Monitor { index } = &s.capture.target {
+                    m.index = *index;
+                }
+                m
+            }
             _ => {
                 let mons =
                     if backend == BackendKind::X11 { vinci_capture::monitors::list_x11_monitors() } else { vinci_capture::list_monitors() };
