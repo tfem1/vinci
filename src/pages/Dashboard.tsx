@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowRight, Gamepad2, Gauge, Loader2, MonitorPlay, Pause, Play } from "lucide-react";
+import { AlertTriangle, ArrowRight, Copy, Gamepad2, Gauge, Loader2, MonitorPlay, Pause, Play, RotateCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ClipCard } from "../components/ClipCard";
 import { Kbd } from "../components/ui";
@@ -34,6 +34,16 @@ export function Dashboard({ onOpen, onPage }: { onOpen: (c: Clip) => void; onPag
     setBusy(true);
     try {
       await api.toggleReplay();
+    } catch (e) {
+      toast({ kind: "error", title: "Replay buffer", detail: errorText(e) });
+    }
+    setBusy(false);
+  };
+
+  const retry = async () => {
+    setBusy(true);
+    try {
+      await api.startReplay();
     } catch (e) {
       toast({ kind: "error", title: "Replay buffer", detail: errorText(e) });
     }
@@ -89,9 +99,28 @@ export function Dashboard({ onOpen, onPage }: { onOpen: (c: Clip) => void; onPag
           </div>
 
           {state === "error" && status?.message && (
-            <div className="note error">
+            <div className="note error fix">
               <AlertTriangle size={14} />
-              <span>{status.message}</span>
+              <div className="fix-body">
+                <b>VINCI can’t record your screen yet</b>
+                <span>{status.message}</span>
+                {status.fix_command && (
+                  <>
+                    <span>Run this in a terminal, then click Retry:</span>
+                    <div className="fix-cmd">
+                      <code>{status.fix_command}</code>
+                      <button className="btn sm" onClick={() => copyText(status.fix_command!, toast)}>
+                        <Copy size={13} /> Copy
+                      </button>
+                    </div>
+                  </>
+                )}
+                <div>
+                  <button className="btn sm primary" onClick={retry} disabled={busy}>
+                    {busy ? <Loader2 size={13} className="spin" /> : <RotateCw size={13} />} Retry
+                  </button>
+                </div>
+              </div>
             </div>
           )}
           {status?.fallback_note && (
@@ -221,4 +250,11 @@ function Meter({ label, value, right, muted }: { label: string; value: number | 
       </div>
     </div>
   );
+}
+
+function copyText(text: string, toast: (t: { kind: "ok" | "error" | "info"; title: string; detail?: string }) => void) {
+  navigator.clipboard
+    .writeText(text)
+    .then(() => toast({ kind: "ok", title: "Command copied", detail: "Paste it in a terminal." }))
+    .catch(() => toast({ kind: "error", title: "Could not copy", detail: "Select the command and copy it by hand." }));
 }

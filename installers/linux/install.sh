@@ -50,6 +50,65 @@ sha256_of() {
   else shasum -a 256 "$1" | awk '{print $1}'; fi
 }
 
+# Wayland screen capture runs a GStreamer pipeline (crates/vinci-capture/src/deps.rs):
+# report the missing elements with the exact install command for this distribution.
+gst_pkg() { # gst_pkg <family> <element>
+  case "$1:$2" in
+    arch:gst-launch-1.0) echo gstreamer ;;
+    arch:pipewiresrc) echo gst-plugin-pipewire ;;
+    arch:videoconvert|arch:videoscale|arch:videorate) echo gst-plugins-base ;;
+    arch:matroskamux) echo gst-plugins-good ;;
+    arch:x264enc) echo gst-plugins-ugly ;;
+    arch:h264parse) echo gst-plugins-bad ;;
+    arch:avenc_aac) echo gst-libav ;;
+    debian:gst-launch-1.0) echo gstreamer1.0-tools ;;
+    debian:pipewiresrc) echo gstreamer1.0-pipewire ;;
+    debian:videoconvert|debian:videoscale|debian:videorate) echo gstreamer1.0-plugins-base ;;
+    debian:matroskamux) echo gstreamer1.0-plugins-good ;;
+    debian:x264enc) echo gstreamer1.0-plugins-ugly ;;
+    debian:h264parse) echo gstreamer1.0-plugins-bad ;;
+    debian:avenc_aac) echo gstreamer1.0-libav ;;
+    fedora:gst-launch-1.0) echo gstreamer1 ;;
+    fedora:pipewiresrc) echo pipewire-gstreamer ;;
+    fedora:videoconvert|fedora:videoscale|fedora:videorate) echo gstreamer1-plugins-base ;;
+    fedora:matroskamux) echo gstreamer1-plugins-good ;;
+    fedora:x264enc) echo gstreamer1-plugins-ugly ;;
+    fedora:h264parse) echo gstreamer1-plugins-bad-free ;;
+    fedora:avenc_aac) echo gstreamer1-plugin-libav ;;
+    suse:gst-launch-1.0) echo gstreamer-utils ;;
+    suse:pipewiresrc) echo gstreamer-plugin-pipewire ;;
+    suse:videoconvert|suse:videoscale|suse:videorate) echo gstreamer-plugins-base ;;
+    suse:matroskamux) echo gstreamer-plugins-good ;;
+    suse:x264enc) echo gstreamer-plugins-ugly ;;
+    suse:h264parse) echo gstreamer-plugins-bad ;;
+    suse:avenc_aac) echo gstreamer-plugins-libav ;;
+  esac
+}
+check_wayland_capture() { # check_wayland_capture <family>
+  [ "${XDG_SESSION_TYPE:-}" = wayland ] || [ -n "${WAYLAND_DISPLAY:-}" ] || return 0
+  local missing="" el pkgs="" p
+  if has gst-inspect-1.0; then
+    for el in pipewiresrc videoconvert videoscale videorate matroskamux x264enc h264parse avenc_aac; do
+      gst-inspect-1.0 "$el" >/dev/null 2>&1 || missing="$missing $el"
+    done
+  else
+    missing=" gst-launch-1.0 pipewiresrc videoconvert matroskamux x264enc h264parse avenc_aac"
+  fi
+  [ -n "$missing" ] || return 0
+  for el in $missing; do
+    p="$(gst_pkg "$1" "$el")"
+    case " $pkgs " in *" $p "*) ;; *) [ -n "$p" ] && pkgs="$pkgs $p" ;; esac
+  done
+  warn "Wayland screen capture needs GStreamer plugins that are missing:$missing"
+  case "$1" in
+    arch)   warn "install them:  sudo pacman -S --needed$pkgs" ;;
+    debian) warn "install them:  sudo apt install$pkgs" ;;
+    fedora) warn "install them:  sudo dnf install$pkgs" ;;
+    suse)   warn "install them:  sudo zypper install$pkgs" ;;
+    *)      warn "install the GStreamer base, good, bad, ugly, libav and PipeWire plugins with your package manager." ;;
+  esac
+}
+
 main() {
   printf '\n  \033[1mV I N C I\033[0m  ·  Capture Every Moment\n\n'
 
@@ -156,9 +215,9 @@ DESKTOP
       *" arch "*) echo arch ;; *" suse "*|*" opensuse"*) echo suse ;; *) echo other ;; esac)"
   fi
   case "$fam" in
-    debian) deps_cmd="sudo apt install libwebkit2gtk-4.1-0 libayatana-appindicator3-1 ffmpeg gstreamer1.0-plugins-good gstreamer1.0-libav gstreamer1.0-pipewire" ;;
+    debian) deps_cmd="sudo apt install libwebkit2gtk-4.1-0 libayatana-appindicator3-1 ffmpeg gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly gstreamer1.0-libav gstreamer1.0-pipewire" ;;
     fedora) deps_cmd="sudo dnf install webkit2gtk4.1 libayatana-appindicator-gtk3 ffmpeg-free gstreamer1-plugins-good pipewire-gstreamer" ;;
-    arch)   deps_cmd="sudo pacman -S --needed webkit2gtk-4.1 libayatana-appindicator ffmpeg gst-plugins-good gst-libav gst-plugin-pipewire" ;;
+    arch)   deps_cmd="sudo pacman -S --needed webkit2gtk-4.1 libayatana-appindicator ffmpeg gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav gst-plugin-pipewire" ;;
     suse)   deps_cmd="sudo zypper install libwebkit2gtk-4_1-0 libayatana-appindicator3-1 ffmpeg gstreamer-plugins-good pipewire-gstreamer" ;;
     *)      deps_cmd="(install WebKitGTK 4.1, libayatana-appindicator3, FFmpeg and GStreamer good/libav/pipewire with your package manager)" ;;
   esac
@@ -169,6 +228,7 @@ DESKTOP
   if ! has ffmpeg; then
     warn "FFmpeg is not installed — VINCI needs it to capture. Install it:  $deps_cmd"
   fi
+  check_wayland_capture "$fam"
   case ":$PATH:" in
     *":$bin_dir:"*) ;;
     *) warn "$bin_dir is not in your PATH. Add this line to ~/.bashrc (or your shell's profile):

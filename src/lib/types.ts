@@ -45,6 +45,8 @@ export interface EngineStatus {
   saving: boolean;
   fallback_note: string | null;
   last_clip_ms: number | null;
+  /** Shell command that fixes `message` (e.g. installs missing GStreamer plugins). */
+  fix_command?: string | null;
 }
 
 export type CaptureTarget = { kind: "monitor"; index: number } | { kind: "window"; exe: string } | { kind: "follow_game" };

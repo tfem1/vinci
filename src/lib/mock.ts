@@ -25,9 +25,17 @@ const settings: Settings = {
 
 const started = Date.now() - 41_000;
 let running = true;
+// `?scenario=wayland-missing` previews the KDE/Wayland "plugins missing" error state.
+const scenario = typeof location !== "undefined" ? new URLSearchParams(location.search).get("scenario") : null;
+if (scenario === "wayland-missing") running = false;
 const status = (): EngineStatus => ({
-  state: running ? "running" : "stopped",
-  message: null,
+  ...(scenario === "wayland-missing"
+    ? {
+        state: "error" as const,
+        message: "Wayland screen capture needs GStreamer plugins that are not installed (pipewiresrc, x264enc, h264parse).",
+        fix_command: "sudo pacman -S --needed gst-plugin-pipewire gst-plugins-ugly gst-plugins-bad gst-libav",
+      }
+    : { state: running ? ("running" as const) : ("stopped" as const), message: null }),
   buffered_secs: running ? Math.min(settings.replay.buffer_secs, (Date.now() - started) / 1000) : 0,
   buffer_target_secs: settings.replay.buffer_secs,
   buffer_bytes: running ? Math.min(settings.replay.buffer_secs, (Date.now() - started) / 1000) * 1_150_000 : 0,
