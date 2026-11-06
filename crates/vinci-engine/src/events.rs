@@ -21,6 +21,8 @@ pub enum ReplayState {
 pub struct EngineStatus {
     pub state: ReplayState,
     pub message: Option<String>,
+    /// Shell command that fixes `message`, shown with a Copy button.
+    pub fix_command: Option<String>,
     pub buffered_secs: f64,
     pub buffer_target_secs: u32,
     pub buffer_bytes: u64,

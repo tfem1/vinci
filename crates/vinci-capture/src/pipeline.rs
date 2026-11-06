@@ -54,19 +54,24 @@ pub struct PipelineSpec {
 }
 
 /// Pick the concrete backend for a request on this machine.
+///
+/// On Wayland only the portal backend can see the screen: X11 capture through
+/// XWayland would record black frames (or find no monitor at all), so `Auto` never
+/// falls back to it — a missing GStreamer piece is reported with the command that
+/// installs it instead. `X11` can still be chosen explicitly.
 pub fn resolve_backend(
     requested: BackendKind,
     ffmpeg: &FfmpegInfo,
     gst: Option<&GstInfo>,
     display: DisplayServer,
 ) -> Result<BackendKind, CaptureError> {
-    let has_portal = gst.is_some_and(|g| g.has("pipewiresrc"));
+    let portal_deps = crate::deps::PortalDeps::check(gst);
     let ok = |b: BackendKind| -> bool {
         match b {
             BackendKind::Wgc => cfg!(windows) && ffmpeg.supports_wgc(),
             BackendKind::Dda => cfg!(windows) && ffmpeg.supports_dda(),
             BackendKind::X11 => cfg!(target_os = "linux") && ffmpeg.has_input_device("x11grab") && std::env::var_os("DISPLAY").is_some(),
-            BackendKind::Portal => cfg!(target_os = "linux") && has_portal,
+            BackendKind::Portal => cfg!(target_os = "linux") && portal_deps.video_ok(),
             BackendKind::Test => ffmpeg.has_input_device("lavfi") || ffmpeg.has_filter("testsrc2"),
             BackendKind::Auto => false,
         }
@@ -74,7 +79,7 @@ pub fn resolve_backend(
     let order: &[BackendKind] = match requested {
         BackendKind::Auto => match display {
             DisplayServer::Windows => &[BackendKind::Wgc, BackendKind::Dda],
-            DisplayServer::Wayland => &[BackendKind::Portal, BackendKind::X11],
+            DisplayServer::Wayland => &[BackendKind::Portal],
             DisplayServer::X11 => &[BackendKind::X11],
             DisplayServer::Unknown => &[],
         },
@@ -84,18 +89,25 @@ pub fn resolve_backend(
         BackendKind::Portal => &[BackendKind::Portal],
         BackendKind::Test => &[BackendKind::Test],
     };
-    order.iter().copied().find(|b| ok(*b)).ok_or_else(|| {
-        CaptureError::NoBackend(match (requested, display) {
-            (BackendKind::Auto, DisplayServer::Wayland) => {
-                "Wayland capture needs GStreamer with the PipeWire plugin (gstreamer1.0-pipewire) and xdg-desktop-portal".into()
-            }
-            (BackendKind::Auto, DisplayServer::Windows) => {
-                "this FFmpeg build has neither gfxcapture (WGC) nor ddagrab (DDA); use the FFmpeg bundled with VINCI".into()
-            }
-            (BackendKind::Auto, DisplayServer::Unknown) => "no graphical session detected (DISPLAY / WAYLAND_DISPLAY unset)".into(),
-            (r, _) => format!("{} is not available on this system", r.label()),
-        })
-    })
+    if let Some(b) = order.iter().copied().find(|b| ok(*b)) {
+        return Ok(b);
+    }
+    let wants_portal = matches!((requested, display), (BackendKind::Auto, DisplayServer::Wayland) | (BackendKind::Portal, _));
+    if wants_portal && cfg!(target_os = "linux") {
+        let missing = portal_deps.all();
+        return Err(CaptureError::MissingDeps {
+            message: format!("Wayland screen capture needs GStreamer plugins that are not installed ({}).", portal_deps.video.join(", ")),
+            command: crate::deps::install_command(&missing, vinci_hw::system::distro_family()),
+        });
+    }
+    Err(CaptureError::NoBackend(match (requested, display) {
+        (BackendKind::Auto, DisplayServer::Windows) => {
+            "this FFmpeg build has neither gfxcapture (WGC) nor ddagrab (DDA); use the FFmpeg bundled with VINCI".into()
+        }
+        (BackendKind::Auto, DisplayServer::X11) => "FFmpeg was built without x11grab (X11 screen capture)".into(),
+        (BackendKind::Auto, DisplayServer::Unknown) => "no graphical session detected (DISPLAY / WAYLAND_DISPLAY unset)".into(),
+        (r, _) => format!("{} is not available on this system", r.label()),
+    }))
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -349,8 +361,9 @@ pub fn gst_portal_args(spec: &PipelineSpec, gst: &GstInfo, pipewire_fd: i32, nod
     el("mux.".into());
     let mut audio_parts: Vec<String> = Vec::new();
     let aac = ["avenc_aac", "fdkaacenc", "voaacenc"].into_iter().find(|e| gst.has(e));
+    let audio_deps = crate::deps::PortalDeps::check(Some(gst));
     if spec.audio.any() {
-        if let Some(enc) = aac {
+        if let (Some(enc), true) = (aac, audio_deps.audio_ok()) {
             let kb = spec.audio_kbps * 1000;
             let src = |dev: &str, vol: f32| {
                 format!("pulsesrc device={dev} do-timestamp=true provide-clock=false ! audioconvert ! audioresample ! audio/x-raw,rate=48000,channels=2 ! volume volume={vol:.2}")
@@ -378,7 +391,7 @@ pub fn gst_portal_args(spec: &PipelineSpec, gst: &GstInfo, pipewire_fd: i32, nod
                 }
             }
         } else {
-            log::warn!("no GStreamer AAC encoder (install gstreamer1.0-libav): recording without audio");
+            log::warn!("GStreamer audio elements missing ({}): recording without audio", audio_deps.audio.join(", "));
         }
     }
     p.extend("matroskamux name=mux streamable=true ! fdsink fd=1 sync=false".split_whitespace().map(String::from));
@@ -580,9 +593,22 @@ mod tests {
                 "falls back to DDA without gfxcapture"
             );
         }
-        let gst = GstInfo { launch: "gst-launch-1.0".into(), elements: ["pipewiresrc".to_string()].into_iter().collect() };
+        let full: Vec<String> = crate::deps::PORTAL_VIDEO.iter().map(|s| s.to_string()).collect();
+        let gst = GstInfo { launch: "gst-launch-1.0".into(), elements: full.into_iter().collect() };
         if cfg!(target_os = "linux") {
             assert_eq!(resolve_backend(BackendKind::Auto, &f, Some(&gst), DisplayServer::Wayland).unwrap(), BackendKind::Portal);
+            // Wayland without the PipeWire plugin: never X11 through XWayland (black / "no monitor found"),
+            // but an explanation naming what is missing.
+            let f11 = ff(&[], &["x11grab", "lavfi"]);
+            let partial = GstInfo { launch: "gst-launch-1.0".into(), elements: ["videoconvert".to_string()].into_iter().collect() };
+            match resolve_backend(BackendKind::Auto, &f11, Some(&partial), DisplayServer::Wayland) {
+                Err(CaptureError::MissingDeps { message, .. }) => assert!(message.contains("pipewiresrc"), "{message}"),
+                other => panic!("expected MissingDeps, got {other:?}"),
+            }
+            assert!(matches!(
+                resolve_backend(BackendKind::Auto, &f11, None, DisplayServer::Wayland),
+                Err(CaptureError::MissingDeps { .. })
+            ));
         }
     }
 
@@ -590,7 +616,11 @@ mod tests {
     fn gst_pipeline_shape() {
         let gst = GstInfo {
             launch: "gst-launch-1.0".into(),
-            elements: ["pipewiresrc", "vah265enc", "vapostproc", "avenc_aac", "x264enc"].iter().map(|s| s.to_string()).collect(),
+            elements: ["pipewiresrc", "vah265enc", "vapostproc", "x264enc"]
+                .iter()
+                .chain(crate::deps::PORTAL_AUDIO)
+                .map(|s| s.to_string())
+                .collect(),
         };
         let sp = spec(BackendKind::Portal, "hevc_vaapi", (1920, 1080));
         let (a, codec) = gst_portal_args(&sp, &gst, 3, 42);

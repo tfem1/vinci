@@ -14,6 +14,7 @@
 //! See [`pipeline`] for the exact process graphs.
 
 pub mod config;
+pub mod deps;
 pub mod devices;
 pub mod monitors;
 pub mod pipeline;
@@ -40,4 +41,7 @@ pub enum CaptureError {
     Audio(String),
     #[error("no monitor found")]
     NoMonitor,
+    /// Something must be installed first; `command` installs it on this distribution.
+    #[error("{message}")]
+    MissingDeps { message: String, command: Option<String> },
 }

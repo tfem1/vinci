@@ -48,6 +48,18 @@ pub fn list_monitors() -> Vec<MonitorInfo> {
     }
 }
 
+/// X11 / XWayland monitors, for an explicitly chosen X11 backend (also on Wayland).
+pub fn list_x11_monitors() -> Vec<MonitorInfo> {
+    #[cfg(target_os = "linux")]
+    {
+        x11_impl::list().unwrap_or_default()
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        Vec::new()
+    }
+}
+
 /// Can a transparent always-on-top overlay window be shown and positioned?
 /// * Windows: always (DWM composition).
 /// * X11: only when a compositing manager owns `_NET_WM_CM_S<n>` (otherwise the

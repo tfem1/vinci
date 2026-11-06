@@ -138,7 +138,7 @@ fn save_without_buffer_fails_cleanly() {
     let dir = tempfile::tempdir().unwrap();
     let e = Engine::new(AppPaths::rooted(dir.path())).unwrap();
     let err = e.save_clip_blocking(Some(30)).unwrap_err();
-    assert!(err.contains("Nothing to save"), "{err}");
+    assert!(err.contains("not recording") && err.contains("Start recording"), "{err}");
     e.shutdown();
 }
 

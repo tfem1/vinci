@@ -35,6 +35,46 @@ impl SystemInfo {
     }
 }
 
+/// Linux distribution family, used to print the right package-manager command.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DistroFamily {
+    Arch,
+    Debian,
+    Fedora,
+    Suse,
+    Other,
+}
+
+/// Distribution family from `/etc/os-release` (`ID`, then `ID_LIKE`).
+pub fn distro_family() -> DistroFamily {
+    std::fs::read_to_string("/etc/os-release")
+        .or_else(|_| std::fs::read_to_string("/usr/lib/os-release"))
+        .map(|s| distro_family_from(&s))
+        .unwrap_or(DistroFamily::Other)
+}
+
+pub fn distro_family_from(os_release: &str) -> DistroFamily {
+    let field = |k: &str| {
+        os_release
+            .lines()
+            .find_map(|l| l.strip_prefix(k).and_then(|v| v.strip_prefix('=')))
+            .map(|v| v.trim().trim_matches('"').to_lowercase())
+            .unwrap_or_default()
+    };
+    let ids = format!("{} {}", field("ID"), field("ID_LIKE"));
+    for id in ids.split_whitespace() {
+        match id {
+            "arch" | "archarm" | "manjaro" | "endeavouros" | "cachyos" | "garuda" | "artix" => return DistroFamily::Arch,
+            "debian" | "ubuntu" | "linuxmint" | "pop" | "zorin" | "elementary" => return DistroFamily::Debian,
+            "fedora" | "rhel" | "centos" | "nobara" | "bazzite" => return DistroFamily::Fedora,
+            "suse" | "opensuse" | "opensuse-tumbleweed" | "opensuse-leap" => return DistroFamily::Suse,
+            _ => {}
+        }
+    }
+    DistroFamily::Other
+}
+
 pub fn display_server() -> DisplayServer {
     if cfg!(windows) {
         return DisplayServer::Windows;

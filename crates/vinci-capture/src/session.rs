@@ -186,7 +186,13 @@ impl CaptureSession {
             // (without CLOEXEC) for `pipewiresrc fd=3`.
             unsafe {
                 g.pre_exec(move || {
-                    if libc::dup2(fd, 3) < 0 {
+                    if fd == 3 {
+                        // dup2(3, 3) is a no-op that keeps FD_CLOEXEC: clear it explicitly.
+                        let flags = libc::fcntl(3, libc::F_GETFD);
+                        if flags < 0 || libc::fcntl(3, libc::F_SETFD, flags & !libc::FD_CLOEXEC) < 0 {
+                            return Err(std::io::Error::last_os_error());
+                        }
+                    } else if libc::dup2(fd, 3) < 0 {
                         return Err(std::io::Error::last_os_error());
                     }
                     Ok(())

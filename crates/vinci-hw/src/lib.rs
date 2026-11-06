@@ -27,7 +27,7 @@ pub use ffmpeg::{FfmpegInfo, FfmpegSource};
 pub use gpu::{GpuInfo, GpuVendor};
 pub use gstreamer::GstInfo;
 pub use stats::{GpuUsage, ResourceStats, StatsSampler};
-pub use system::{DisplayServer, SystemInfo};
+pub use system::{DisplayServer, DistroFamily, SystemInfo};
 
 #[derive(Debug, thiserror::Error)]
 pub enum HwError {

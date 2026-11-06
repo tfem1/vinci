@@ -69,6 +69,51 @@ impl From<&str> for EngineError {
 
 pub type Result<T> = std::result::Result<T, EngineError>;
 
+/// Why capture could not start, and the command that fixes it when there is one.
+#[derive(Debug)]
+struct StartError {
+    message: String,
+    fix: Option<String>,
+}
+
+impl From<String> for StartError {
+    fn from(message: String) -> Self {
+        Self { message, fix: None }
+    }
+}
+
+impl From<CaptureError> for StartError {
+    fn from(e: CaptureError) -> Self {
+        match e {
+            CaptureError::MissingDeps { message, command } => Self { message, fix: command },
+            CaptureError::NoMonitor => {
+                Self { message: "no screen to record was found. On Wayland, set Capture → Source to Automatic.".into(), fix: None }
+            }
+            CaptureError::Portal(m) if m.contains("not allowed") || m.contains("Cancelled") || m.contains("cancelled") => {
+                Self { message: "screen sharing was refused in the system dialog. Click Retry and choose your screen.".into(), fix: None }
+            }
+            other => Self { message: other.to_string(), fix: None },
+        }
+    }
+}
+
+/// Command that installs FFmpeg on this machine (Linux), if the distribution is known.
+fn ffmpeg_install_command() -> Option<String> {
+    if !cfg!(target_os = "linux") {
+        return None;
+    }
+    Some(
+        match vinci_hw::system::distro_family() {
+            vinci_hw::DistroFamily::Arch => "sudo pacman -S --needed ffmpeg",
+            vinci_hw::DistroFamily::Debian => "sudo apt install ffmpeg",
+            vinci_hw::DistroFamily::Fedora => "sudo dnf install ffmpeg",
+            vinci_hw::DistroFamily::Suse => "sudo zypper install ffmpeg",
+            vinci_hw::DistroFamily::Other => return None,
+        }
+        .to_string(),
+    )
+}
+
 fn now_ms() -> i64 {
     chrono::Utc::now().timestamp_millis()
 }
@@ -77,6 +122,8 @@ fn now_ms() -> i64 {
 struct StatusInner {
     state: ReplayState,
     message: Option<String>,
+    /// Shell command that fixes `message` (e.g. installs missing GStreamer plugins).
+    fix_command: Option<String>,
     session: Option<vinci_capture::SessionInfo>,
     since_ms: Option<i64>,
     restarts: u32,
@@ -231,10 +278,15 @@ impl Engine {
     }
 
     fn set_state(&self, state: ReplayState, message: Option<String>) {
+        self.set_state_fix(state, message, None)
+    }
+
+    fn set_state_fix(&self, state: ReplayState, message: Option<String>, fix_command: Option<String>) {
         {
             let mut s = self.0.status.lock();
             s.state = state;
             s.message = message;
+            s.fix_command = fix_command;
             if matches!(state, ReplayState::Stopped | ReplayState::Error) {
                 s.session = None;
                 s.since_ms = None;
@@ -310,6 +362,40 @@ impl Engine {
         st
     }
 
+    /// Re-read the GStreamer plugin list (cheap) so plugins installed while VINCI runs
+    /// are picked up by the next start, without re-probing the encoders.
+    fn refresh_gstreamer(&self) {
+        if !cfg!(target_os = "linux") {
+            return;
+        }
+        let Some(cur) = self.0.hw.read().clone() else { return };
+        let fresh = vinci_hw::gstreamer::detect();
+        let changed = match (&cur.report.gstreamer, &fresh) {
+            (Some(a), Some(b)) => a.elements != b.elements,
+            (None, None) => false,
+            _ => true,
+        };
+        if changed {
+            log::info!("GStreamer plugins changed; using the new list");
+            let mut next = (*cur).clone();
+            next.report.gstreamer = fresh;
+            *self.0.hw.write() = Some(Arc::new(next));
+        }
+    }
+
+    /// Plain-language reason a clip cannot be saved right now.
+    fn nothing_to_save_reason(&self) -> String {
+        let st = self.0.status.lock();
+        match st.state {
+            ReplayState::Error => {
+                format!("VINCI is not recording: {}", st.message.clone().unwrap_or_else(|| "capture stopped on an error".into()))
+            }
+            ReplayState::Stopped => "VINCI is not recording — click “Start recording” first.".into(),
+            ReplayState::Starting | ReplayState::Restarting => "Recording is starting — try again in a few seconds.".into(),
+            ReplayState::Running => "Nothing recorded yet — try again in a second.".into(),
+        }
+    }
+
     pub fn monitors(&self) -> Vec<MonitorInfo> {
         vinci_capture::list_monitors()
     }
@@ -328,6 +414,7 @@ impl Engine {
         EngineStatus {
             state: s.state,
             message: s.message.clone(),
+            fix_command: s.fix_command.clone(),
             buffered_secs: stats.buffered_secs,
             buffer_target_secs: settings.replay.buffer_secs,
             buffer_bytes: stats.bytes,
@@ -364,6 +451,7 @@ impl Engine {
             let mut s = self.0.status.lock();
             s.state = ReplayState::Starting;
             s.message = None;
+            s.fix_command = None;
             s.restarts = 0;
         }
         let thread = std::thread::Builder::new().name("vinci-capture".into()).spawn(move || e.capture_loop(st, sl))?;
@@ -411,21 +499,24 @@ impl Engine {
         &self,
         hw: &HwState,
         blacklist: &HashSet<String>,
-    ) -> std::result::Result<(PipelineSpec, vinci_hw::FfmpegInfo, Option<String>), String> {
+    ) -> std::result::Result<(PipelineSpec, vinci_hw::FfmpegInfo, Option<String>), StartError> {
         let s = self.settings();
-        let ff = hw.report.ffmpeg.clone().ok_or_else(|| hw.report.ffmpeg_error.clone().unwrap_or_else(|| "FFmpeg not found".into()))?;
+        let ff = hw.report.ffmpeg.clone().ok_or_else(|| StartError {
+            message: hw.report.ffmpeg_error.clone().unwrap_or_else(|| "FFmpeg is not installed.".into()),
+            fix: ffmpeg_install_command(),
+        })?;
         let display = hw.report.system.display_server;
-        let backend =
-            vinci_capture::resolve_backend(s.capture.backend, &ff, hw.report.gstreamer.as_ref(), display).map_err(|e| e.to_string())?;
+        let backend = vinci_capture::resolve_backend(s.capture.backend, &ff, hw.report.gstreamer.as_ref(), display)?;
         let monitor = match backend {
             BackendKind::Test | BackendKind::Portal => MonitorInfo::synthetic(1920, 1080),
             _ => {
-                let mons = vinci_capture::list_monitors();
+                let mons =
+                    if backend == BackendKind::X11 { vinci_capture::monitors::list_x11_monitors() } else { vinci_capture::list_monitors() };
                 let idx = match &s.capture.target {
                     CaptureTarget::Monitor { index } => *index,
                     _ => mons.iter().find(|m| m.primary).map(|m| m.index).unwrap_or(0),
                 };
-                vinci_capture::monitors::pick(&mons, idx).ok_or_else(|| CaptureError::NoMonitor.to_string())?
+                vinci_capture::monitors::pick(&mons, idx).ok_or(CaptureError::NoMonitor)?
             }
         };
         let window_exe = match (&s.capture.target, backend) {
@@ -438,11 +529,11 @@ impl Engine {
         let probes: Vec<_> = hw.probes.iter().filter(|p| !blacklist.contains(&p.id)).cloned().collect();
         let (enc, fell_back) = vinci_encoding::select(&probes, codec, s.encoding.encoder.as_deref(), s.encoding.allow_software)
             .ok_or_else(|| {
-                if hw.probes.iter().any(|p| p.ok) {
+                StartError::from(if hw.probes.iter().any(|p| p.ok) {
                     "every working encoder failed repeatedly — see Settings → Diagnostics".to_string()
                 } else {
                     "no working video encoder found (no hardware encoder, and CPU encoding is disabled or missing from FFmpeg)".to_string()
-                }
+                })
             })?;
         let fps = s.effective_fps();
         let out = if backend == BackendKind::Test {
@@ -519,12 +610,18 @@ impl Engine {
             }
         };
         while !stop.load(Ordering::SeqCst) {
+            // Plugins may have been installed since the last attempt ("Retry").
+            self.refresh_gstreamer();
             let hw = self.hardware(false);
             let (spec, ff, note) = match self.build_spec(&hw, &blacklist) {
                 Ok(x) => x,
                 Err(e) => {
-                    log::error!("cannot start capture: {e}");
-                    self.set_state(ReplayState::Error, Some(e));
+                    log::error!(
+                        "cannot start capture: {}{}",
+                        e.message,
+                        e.fix.as_deref().map(|f| format!(" — fix: {f}")).unwrap_or_default()
+                    );
+                    self.set_state_fix(ReplayState::Error, Some(e.message), e.fix);
                     break;
                 }
             };
@@ -541,10 +638,11 @@ impl Engine {
             let mut session = match CaptureSession::start(&spec, &ff, hw.report.gstreamer.as_ref()) {
                 Ok(s) => s,
                 Err(e) => {
-                    let fatal = matches!(e, CaptureError::NoBackend(_) | CaptureError::Portal(_));
+                    let fatal = matches!(e, CaptureError::NoBackend(_) | CaptureError::Portal(_) | CaptureError::MissingDeps { .. });
                     log::error!("capture start failed: {e}");
                     if fatal {
-                        self.set_state(ReplayState::Error, Some(e.to_string()));
+                        let se = StartError::from(e);
+                        self.set_state_fix(ReplayState::Error, Some(se.message), se.fix);
                         break;
                     }
                     consecutive += 1;
@@ -774,13 +872,7 @@ impl Engine {
             }
             std::thread::sleep(Duration::from_millis(20));
         }
-        let snap = self
-            .0
-            .buffer
-            .lock()
-            .as_ref()
-            .and_then(|b| b.snapshot(secs as f64))
-            .ok_or("Nothing to save yet — start the replay buffer first")?;
+        let snap = self.0.buffer.lock().as_ref().and_then(|b| b.snapshot(secs as f64)).ok_or_else(|| self.nothing_to_save_reason())?;
         let hw = self.hardware(false);
         let ff = hw.report.ffmpeg.clone().ok_or("FFmpeg not found")?;
         let game = self.0.game.read().as_ref().map(|g| g.name.clone());
