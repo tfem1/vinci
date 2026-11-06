@@ -17,6 +17,17 @@ Buffer de replay encodé par le GPU, clip en une touche, aucun réencodage, aucu
 
 ## Installation
 
+**Installation rapide (Linux — fonctionne dès maintenant, sans release) :**
+
+```bash
+git clone https://github.com/tfem1/vinci && cd vinci && ./scripts/install-from-source.sh
+```
+
+Le script vérifie d'abord les prérequis (Rust, Node.js 20+, WebKitGTK…) et affiche la commande
+`pacman` / `apt` / `dnf` / `zypper` exacte pour ce qui manque, puis compile et installe
+`vinci` et `vinci-cli` dans `~/.local/bin`. Windows : voir [C. Depuis les sources](#c-depuis-les-sources-fonctionne-dès-aujourdhui-sans-release).
+
+
 Trois méthodes prises en charge, toutes par utilisateur, sans droits administrateur :
 
 | | Commande | Installe dans |

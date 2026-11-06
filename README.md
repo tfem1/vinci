@@ -17,6 +17,17 @@ GPU-encoded replay buffer, one-key clips, no re-encoding, no account, no cloud.
 
 ## Install
 
+**Quick install (Linux — works now, no release needed):**
+
+```bash
+git clone https://github.com/tfem1/vinci && cd vinci && ./scripts/install-from-source.sh
+```
+
+It checks the build prerequisites first (Rust, Node.js 20+, WebKitGTK…) and prints the exact
+`pacman` / `apt` / `dnf` / `zypper` command for anything missing, then builds and installs
+`vinci` and `vinci-cli` into `~/.local/bin`. Windows: see [C. From source](#c-from-source-works-today-no-release-needed).
+
+
 Three supported ways — all per-user, no administrator rights:
 
 | | Command | Installs to |
