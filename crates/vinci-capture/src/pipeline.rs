@@ -142,9 +142,11 @@ pub fn ffmpeg_command(spec: &PipelineSpec, ffmpeg: &FfmpegInfo) -> Result<Ffmpeg
     match spec.backend {
         BackendKind::X11 => {
             let disp = spec.x11_display.clone().or_else(|| std::env::var("DISPLAY").ok()).unwrap_or_else(|| ":0".into());
-            // Keep the raw-frame queue tiny: if the encoder falls behind we drop frames
-            // instead of buffering gigabytes of uncompressed video.
-            push(&mut a, ["-thread_queue_size", "8", "-f", "x11grab", "-framerate"]);
+            // Keep the raw-frame queue small (16 × 8 MB at 1080p): if the encoder falls
+            // behind we drop frames instead of buffering gigabytes of raw video.
+            // Measured: `-fps_mode passthrough` + PulseAudio stalls FFmpeg 6.1's
+            // single-threaded main loop (~20 fps), so the default CFR mode is kept.
+            push(&mut a, ["-thread_queue_size", "16", "-f", "x11grab", "-framerate"]);
             a.push(fps.to_string());
             push(&mut a, ["-draw_mouse", if spec.cursor { "1" } else { "0" }, "-video_size"]);
             a.push(format!("{sw}x{sh}"));
@@ -273,11 +275,6 @@ pub fn ffmpeg_command(spec: &PipelineSpec, ffmpeg: &FfmpegInfo) -> Result<Ffmpeg
         a.push(m);
     }
     a.extend(plan.encoder_args);
-    if spec.backend == BackendKind::X11 {
-        // x11grab already paces frames; when the machine is overloaded, do not encode
-        // duplicated frames to fake a constant rate (saves CPU exactly when it is scarce).
-        push(&mut a, ["-fps_mode", "passthrough"]);
-    }
     if spec.encoder.id == "libx264" {
         // Measured on 1080p60: default look-ahead/frame threads use ~420 MB; this keeps
         // ~300 MB for +4 % size (`zerolatency` would be 136 MB but files 2.7× larger).

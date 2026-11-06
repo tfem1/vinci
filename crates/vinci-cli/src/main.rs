@@ -235,8 +235,9 @@ fn run(engine: &Engine, cmd: Cmd) -> i32 {
                 if let Some(after) = save_after {
                     if !saved_once && start.elapsed() >= Duration::from_secs(after) {
                         saved_once = true;
+                        // The ClipSaved event prints the result.
                         match engine.save_clip_blocking(Some(save_secs)) {
-                            Ok(c) => println!("SAVED {} ({:.1} s, {})", c.path.display(), c.duration, mb(c.size)),
+                            Ok(_) => {}
                             Err(e) => {
                                 eprintln!("save failed: {e}");
                                 return 2;
