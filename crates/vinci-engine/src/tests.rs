@@ -56,7 +56,9 @@ fn replay_save_library_and_compress() {
         let clip = e.save_clip_blocking(Some(5)).expect("save");
         let save_ms = t0.elapsed().as_millis();
         assert!(clip.path.exists());
-        assert!(clip.duration >= 5.0 && clip.duration <= 7.5, "duration {}", clip.duration);
+        // Clips start on a keyframe (≤ 2 s before the requested start) and end on a
+        // 0.5 s fragment; audio can add a few ms on a slow runner.
+        assert!(clip.duration >= 5.0 && clip.duration <= 8.0, "duration {}", clip.duration);
         assert_eq!((clip.width, clip.height), (1280, 720));
         assert_eq!(clip.audio_codec.as_deref(), Some("aac"));
         assert!(clip.thumbnail.as_ref().is_some_and(|t| t.exists()), "thumbnail generated");
