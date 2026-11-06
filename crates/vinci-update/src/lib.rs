@@ -393,7 +393,7 @@ mod tests {
             ],
         );
 
-        let mut up = Updater::new("USERNAME/vinci", "0.1.0", Channel::Stable);
+        let mut up = Updater::new("tfem1/vinci", "0.1.0", Channel::Stable);
         up.public_key = Some(pk.clone());
         up.kind = InstallKind::Source;
         up.allow_http = true;

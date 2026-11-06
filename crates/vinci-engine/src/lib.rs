@@ -43,7 +43,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// GitHub `owner/repo` used for updates — set `VINCI_REPO` at build time.
 pub const REPO: &str = match option_env!("VINCI_REPO") {
     Some(r) => r,
-    None => "USERNAME/vinci",
+    None => "tfem1/vinci",
 };
 
 #[derive(Debug, thiserror::Error)]

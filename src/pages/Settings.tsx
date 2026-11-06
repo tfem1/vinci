@@ -216,7 +216,7 @@ export function Settings() {
           <Download size={14} /> Updates
         </h2>
         <div className="card pad">
-          <Setting title={`VINCI ${info?.version ?? ""}`} desc={`Installed as ${info?.install_kind ?? "—"} · signed updates from github.com/${info?.repo ?? "USERNAME/vinci"}`}>
+          <Setting title={`VINCI ${info?.version ?? ""}`} desc={`Installed as ${info?.install_kind ?? "—"} · signed updates from github.com/${info?.repo ?? "tfem1/vinci"}`}>
             <button className="btn sm" onClick={check} disabled={checking}>
               <RefreshCw size={13} className={checking ? "spin" : ""} /> Check now
             </button>

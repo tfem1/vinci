@@ -20,25 +20,25 @@ Buffer de replay encodé par le GPU, clip en une touche, aucun réencodage, aucu
 **Linux** (Ubuntu, Debian, Mint, Pop!_OS, Fedora, openSUSE, Arch…) :
 
 ```bash
-curl -fsSL https://github.com/USERNAME/vinci/releases/latest/download/install.sh | bash
+curl -fsSL https://github.com/tfem1/vinci/releases/latest/download/install.sh | bash
 ```
 
 **Windows 10 / 11** (PowerShell, sans droits administrateur) :
 
 ```powershell
-irm https://github.com/USERNAME/vinci/releases/latest/download/install.ps1 | iex
+irm https://github.com/tfem1/vinci/releases/latest/download/install.ps1 | iex
 ```
 
-> `USERNAME/vinci` est un placeholder tant que le dépôt n'est pas publié : les mainteneurs
-> lancent `scripts/configure-project.sh <owner>/<repo>`. Une fois un domaine relié au site
-> d'installation (voir [docs/RELEASING.md](docs/RELEASING.md)), la forme courte fonctionne :
+> Ces commandes fonctionnent dès la publication de la première release (voir
+> [docs/RELEASING.md](docs/RELEASING.md)). Une fois un domaine relié au site d'installation,
+> la forme courte fonctionne aussi :
 > `curl -fsSL https://<votre-domaine>/install.sh | bash` et `irm https://<votre-domaine>/install.ps1 | iex`
 > (par exemple `vinci.app`, une fois ce domaine configuré).
 
 Les deux scripts vérifient chaque téléchargement avant toute exécution : SHA-256, plus,
 lorsqu'ils sont configurés, la signature Ed25519 de la liste des sommes de contrôle et
 Authenticode. Les installateurs classiques sont sur la
-[page Releases](https://github.com/USERNAME/vinci/releases) : `VINCI-windows-x64-setup.exe`,
+[page Releases](https://github.com/tfem1/vinci/releases) : `VINCI-windows-x64-setup.exe`,
 `.msi`, `.deb`, `.rpm`, `.AppImage`. Détails : [installers/README.md](installers/README.md).
 
 Raccourci par défaut : **Alt+F10** sauvegarde les 30 dernières secondes. Les clips vont dans `Vidéos/VINCI`.
@@ -152,7 +152,7 @@ Plasma, GNOME 48+, Hyprland…). Sur les bureaux qui ne l'ont pas, associez
 ## Compiler depuis les sources
 
 ```bash
-git clone https://github.com/USERNAME/vinci.git
+git clone https://github.com/tfem1/vinci.git
 cd vinci
 ```
 

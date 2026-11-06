@@ -11,7 +11,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 VERSION="${1:?version}"; IN="${2:?input dir}"; OUT="${3:?output dir}"; CHANNEL="${4:-stable}"
-REPO="${VINCI_REPO:-${GITHUB_REPOSITORY:-USERNAME/vinci}}"
+REPO="${VINCI_REPO:-${GITHUB_REPOSITORY:-tfem1/vinci}}"
 TAG="v${VERSION#v}"
 mkdir -p "$OUT"
 

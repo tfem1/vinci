@@ -22,7 +22,7 @@ INSTALL_URL="${2:-https://github.com/$REPO/releases/latest/download}"
 INSTALL_URL="${INSTALL_URL%/}"
 PUBKEY="${3:-}"
 
-files=$(grep -rlE 'USERNAME/vinci|<INSTALL_URL>' --exclude-dir={node_modules,target,dist,.git} . || true)
+files=$(grep -rlE 'USERNAME/vinci|<INSTALL_URL>' --exclude-dir={node_modules,target,dist,.git} --exclude=configure-project.sh --exclude=RELEASING.md . || true)
 for f in $files; do
   sed -i.bak -e "s#USERNAME/vinci#$REPO#g" -e "s#<INSTALL_URL>#$INSTALL_URL#g" "$f" && rm -f "$f.bak"
   echo "updated $f"

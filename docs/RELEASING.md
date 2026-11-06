@@ -3,7 +3,8 @@
 ## One-time setup
 
 1. **Create the GitHub repository** and push this code.
-2. **Replace the placeholders** (`USERNAME/vinci`, `<INSTALL_URL>`):
+2. **Replace the placeholders** (`USERNAME/vinci`, `<INSTALL_URL>`) — already done for
+   `tfem1/vinci`; for a fork or a renamed repository run:
    ```bash
    scripts/configure-project.sh <owner>/<repo>
    ```

@@ -2,12 +2,13 @@
 
 | File | Platform | Usage |
 |---|---|---|
-| `linux/install.sh` | Ubuntu, Debian, Mint, Pop!_OS, Fedora, openSUSE, Arch & derivatives | `curl -fsSL <INSTALL_URL>/install.sh \| bash` |
-| `windows/install.ps1` | Windows 10 (1809+) / 11, x64 (ARM64 via emulation) | `irm <INSTALL_URL>/install.ps1 \| iex` |
-| `windows/uninstall.ps1` | Windows | `irm <INSTALL_URL>/uninstall.ps1 \| iex` |
+| `linux/install.sh` | Ubuntu, Debian, Mint, Pop!_OS, Fedora, openSUSE, Arch & derivatives | `curl -fsSL https://github.com/tfem1/vinci/releases/latest/download/install.sh \| bash` |
+| `windows/install.ps1` | Windows 10 (1809+) / 11, x64 (ARM64 via emulation) | `irm https://github.com/tfem1/vinci/releases/latest/download/install.ps1 \| iex` |
+| `windows/uninstall.ps1` | Windows | `irm https://github.com/tfem1/vinci/releases/latest/download/uninstall.ps1 \| iex` |
 
-`<INSTALL_URL>` is `https://github.com/USERNAME/vinci/releases/latest/download` until a
-custom domain is configured (see `docs/RELEASING.md`).
+These URLs point to the latest stable GitHub release. Once a custom domain is attached to
+the install site (see `docs/RELEASING.md`), `https://<your-domain>/install.sh` and
+`https://<your-domain>/install.ps1` work as well.
 
 ## Linux — `install.sh`
 
@@ -23,11 +24,11 @@ What it does, in order:
 
 ```bash
 # options (with curl | bash, pass them after `bash -s --`)
-curl -fsSL <INSTALL_URL>/install.sh | bash -s -- --beta
-curl -fsSL <INSTALL_URL>/install.sh | bash -s -- --user          # AppImage, no sudo
-curl -fsSL <INSTALL_URL>/install.sh | bash -s -- --version v0.2.0
-curl -fsSL <INSTALL_URL>/install.sh | bash -s -- --uninstall     # keeps clips & settings
-curl -fsSL <INSTALL_URL>/install.sh | bash -s -- --uninstall --purge
+curl -fsSL https://github.com/tfem1/vinci/releases/latest/download/install.sh | bash -s -- --beta
+curl -fsSL https://github.com/tfem1/vinci/releases/latest/download/install.sh | bash -s -- --user          # AppImage, no sudo
+curl -fsSL https://github.com/tfem1/vinci/releases/latest/download/install.sh | bash -s -- --version v0.2.0
+curl -fsSL https://github.com/tfem1/vinci/releases/latest/download/install.sh | bash -s -- --uninstall     # keeps clips & settings
+curl -fsSL https://github.com/tfem1/vinci/releases/latest/download/install.sh | bash -s -- --uninstall --purge
 ```
 
 ## Windows — `install.ps1`
@@ -39,8 +40,8 @@ curl -fsSL <INSTALL_URL>/install.sh | bash -s -- --uninstall --purge
 5. Creates Start-menu and desktop shortcuts, optional autostart (`HKCU\…\Run`), offers to launch.
 
 ```powershell
-$env:VINCI_SILENT = "1"; $env:VINCI_AUTOSTART = "1"; irm <INSTALL_URL>/install.ps1 | iex
-$env:VINCI_CHANNEL = "beta"; irm <INSTALL_URL>/install.ps1 | iex
+$env:VINCI_SILENT = "1"; $env:VINCI_AUTOSTART = "1"; irm https://github.com/tfem1/vinci/releases/latest/download/install.ps1 | iex
+$env:VINCI_CHANNEL = "beta"; irm https://github.com/tfem1/vinci/releases/latest/download/install.ps1 | iex
 ```
 
 ## Classic installers

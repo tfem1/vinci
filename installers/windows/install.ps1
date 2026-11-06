@@ -1,7 +1,7 @@
 <#
 =============================================================================
  VINCI — Capture Every Moment
- Windows installer:   irm <INSTALL_URL>/install.ps1 | iex
+ Windows installer:   irm https://github.com/tfem1/vinci/releases/latest/download/install.ps1 | iex
 
  Options — environment variables (work with `irm | iex`):
    $env:VINCI_VERSION   = "v1.2.0"   specific release (default: latest stable)
@@ -12,7 +12,7 @@
    $env:VINCI_NO_LAUNCH = "1"        do not start VINCI at the end
    $env:VINCI_MSI       = "1"        use the MSI (per-machine, needs admin)
  …or as parameters:
-   & ([scriptblock]::Create((irm <INSTALL_URL>/install.ps1))) -Silent -Autostart
+   & ([scriptblock]::Create((irm https://github.com/tfem1/vinci/releases/latest/download/install.ps1))) -Silent -Autostart
 
  Security: the installer is verified against SHA256SUMS before it runs, and its
  Authenticode signature is checked when the release is code-signed. No admin
@@ -33,7 +33,7 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'   # Invoke-WebRequest is 10x faster without the progress bar
 
 function Install-Vinci {
-    $Repo = if ($env:VINCI_REPO) { $env:VINCI_REPO } else { 'USERNAME/vinci' }
+    $Repo = if ($env:VINCI_REPO) { $env:VINCI_REPO } else { 'tfem1/vinci' }
 
     function Write-Step($t) { Write-Host ""; Write-Host "> $t" -ForegroundColor White }
     function Write-Ok($t) { Write-Host "  [ok] $t" -ForegroundColor Green }
@@ -174,7 +174,7 @@ function Install-Vinci {
 
     Write-Host ""
     Write-Host "  Your clips go to $([Environment]::GetFolderPath('MyVideos'))\VINCI. Default hotkey: Alt+F10 (save the last 30 s)." -ForegroundColor Gray
-    Write-Host "  Uninstall: Settings > Apps > VINCI, or: irm <INSTALL_URL>/uninstall.ps1 | iex" -ForegroundColor DarkGray
+    Write-Host "  Uninstall: Settings > Apps > VINCI, or: irm https://github.com/tfem1/vinci/releases/latest/download/uninstall.ps1 | iex" -ForegroundColor DarkGray
 
     if (-not $NoLaunch) {
         $launch = $true

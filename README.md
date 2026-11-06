@@ -20,24 +20,24 @@ GPU-encoded replay buffer, one-key clips, no re-encoding, no account, no cloud.
 **Linux** (Ubuntu, Debian, Mint, Pop!_OS, Fedora, openSUSE, Arch…):
 
 ```bash
-curl -fsSL https://github.com/USERNAME/vinci/releases/latest/download/install.sh | bash
+curl -fsSL https://github.com/tfem1/vinci/releases/latest/download/install.sh | bash
 ```
 
 **Windows 10 / 11** (PowerShell, no admin rights needed):
 
 ```powershell
-irm https://github.com/USERNAME/vinci/releases/latest/download/install.ps1 | iex
+irm https://github.com/tfem1/vinci/releases/latest/download/install.ps1 | iex
 ```
 
-> `USERNAME/vinci` is a placeholder until the repository is published — maintainers run
-> `scripts/configure-project.sh <owner>/<repo>`. Once a custom domain is attached to the
-> install site (see [docs/RELEASING.md](docs/RELEASING.md)), the short form works too:
+> These commands work as soon as the first release is published (see
+> [docs/RELEASING.md](docs/RELEASING.md)). Once a custom domain is attached to the install
+> site, the short form works too:
 > `curl -fsSL https://<your-domain>/install.sh | bash` and `irm https://<your-domain>/install.ps1 | iex`
 > (for example `vinci.app`, once that domain is configured).
 
 Both scripts verify every download (SHA-256, plus an Ed25519 signature of the checksum
 list and Authenticode when configured) before anything runs. Classic installers are on the
-[Releases page](https://github.com/USERNAME/vinci/releases): `VINCI-windows-x64-setup.exe`,
+[Releases page](https://github.com/tfem1/vinci/releases): `VINCI-windows-x64-setup.exe`,
 `.msi`, `.deb`, `.rpm`, `.AppImage`. Details: [installers/README.md](installers/README.md).
 
 Default hotkey: **Alt+F10** saves the last 30 seconds. Clips go to `Videos/VINCI`.
@@ -150,7 +150,7 @@ desktop's keyboard settings.
 ## Build from source
 
 ```bash
-git clone https://github.com/USERNAME/vinci.git
+git clone https://github.com/tfem1/vinci.git
 cd vinci
 ```
 

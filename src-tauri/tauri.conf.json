@@ -40,7 +40,7 @@
     "category": "Video",
     "shortDescription": "Capture Every Moment — lightweight instant replay for games",
     "longDescription": "VINCI keeps the last minutes of your gameplay in a GPU-encoded replay buffer and saves clips instantly with a hotkey, without re-encoding. Lightweight, private, no account, no cloud.",
-    "homepage": "https://github.com/USERNAME/vinci",
+    "homepage": "https://github.com/tfem1/vinci",
     "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"],
     "linux": {
       "deb": {

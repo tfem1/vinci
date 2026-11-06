@@ -10,8 +10,8 @@ version = "0.1.0"
 edition = "2021"
 license = "MIT"
 authors = ["VINCI contributors"]
-repository = "https://github.com/USERNAME/vinci"
-homepage = "https://github.com/USERNAME/vinci"
+repository = "https://github.com/tfem1/vinci"
+homepage = "https://github.com/tfem1/vinci"
 rust-version = "1.82"
 
 [workspace.dependencies]

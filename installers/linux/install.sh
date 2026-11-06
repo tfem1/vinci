@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =============================================================================
 #  VINCI — Capture Every Moment
-#  Linux installer:   curl -fsSL <INSTALL_URL>/install.sh | bash
+#  Linux installer:   curl -fsSL https://github.com/tfem1/vinci/releases/latest/download/install.sh | bash
 #
 #  Options (after `bash -s --` when piped):
 #    --version vX.Y.Z   install a specific release (default: latest stable)
@@ -23,7 +23,7 @@
 # =============================================================================
 set -euo pipefail
 
-VINCI_REPO="${VINCI_REPO:-USERNAME/vinci}"
+VINCI_REPO="${VINCI_REPO:-tfem1/vinci}"
 # Ed25519 public key (PEM) used to verify SHA256SUMS.sig. Set by
 # scripts/configure-project.sh — while it reads UNCONFIGURED, only SHA-256 is checked.
 VINCI_RELEASE_PUBKEY_PEM="UNCONFIGURED"
@@ -93,7 +93,7 @@ main() {
 
   printf '\n%s\n%s\n' "${B}  V I N C I${R}" "${D}  Capture Every Moment${R}"
 
-  [ "$(uname -s)" = "Linux" ] || die "This installer is for Linux. On Windows use: irm <INSTALL_URL>/install.ps1 | iex"
+  [ "$(uname -s)" = "Linux" ] || die "This installer is for Linux. On Windows use: irm https://github.com/tfem1/vinci/releases/latest/download/install.ps1 | iex"
   detect_platform
   if [ "$UNINSTALL" = 1 ]; then uninstall; exit 0; fi
 
@@ -329,7 +329,7 @@ verify_install() {
   [ -x "$BIN" ] || die "Installation failed: $BIN not found"
   ok "VINCI is installed: $BIN"
   say "Your clips go to ~/Videos/VINCI. Default hotkey: Alt+F10 (save last 30 s)."
-  say "Uninstall any time: curl -fsSL <INSTALL_URL>/install.sh | bash -s -- --uninstall"
+  say "Uninstall any time: curl -fsSL https://github.com/tfem1/vinci/releases/latest/download/install.sh | bash -s -- --uninstall"
 }
 
 offer_launch() {

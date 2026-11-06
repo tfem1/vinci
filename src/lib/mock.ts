@@ -169,7 +169,7 @@ export async function mockInvoke<T>(cmd: string, args: Record<string, unknown> =
     case "clip_thumbnail":
       return r(clips.find((c) => c.id === args.id)?.thumbnail ?? null);
     case "get_app_info":
-      return r({ version: "0.1.0", repo: "USERNAME/vinci", clips_dir: "C:\\Users\\you\\Videos\\VINCI", logs_dir: "", config_dir: "", install_kind: "windows_nsis", platform: "windows" });
+      return r({ version: "0.1.0", repo: "tfem1/vinci", clips_dir: "C:\\Users\\you\\Videos\\VINCI", logs_dir: "", config_dir: "", install_kind: "windows_nsis", platform: "windows" });
     case "hotkey_status":
       return r({ backend: "global-hotkey", registrations: [{ id: "save_default", accelerator: "Alt+F10", ok: true, error: null }, { id: "toggle_replay", accelerator: "Alt+F9", ok: true, error: null }], note: null });
     case "validate_hotkey":

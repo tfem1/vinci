@@ -1,5 +1,5 @@
 <#
- VINCI uninstaller:  irm <INSTALL_URL>/uninstall.ps1 | iex
+ VINCI uninstaller:  irm https://github.com/tfem1/vinci/releases/latest/download/uninstall.ps1 | iex
    $env:VINCI_PURGE = "1"  also delete settings, library index and cache.
  Your clips (Videos\VINCI) are NEVER deleted.
 #>
