@@ -157,6 +157,16 @@ fn row_to_clip(r: &Row) -> rusqlite::Result<Clip> {
     })
 }
 
+/// Canonical text form of a clip path as stored in the database: components re-joined
+/// with the platform separator (so `C:\\Clips/Game/x.mp4` and `C:\\Clips\\Game\\x.mp4` are
+/// the same row) and `.` components removed.
+pub fn path_key(p: &Path) -> String {
+    p.components().collect::<PathBuf>().to_string_lossy().into_owned()
+}
+
+/// SQL comparison for paths: NTFS is case-insensitive, Linux file systems are not.
+const PATH_EQ: &str = if cfg!(windows) { "path = ?1 COLLATE NOCASE" } else { "path = ?1" };
+
 const COLS: &str =
     "id, path, title, game, created_at, duration, size, width, height, fps, video_codec, audio_codec, encoder, favorite, thumbnail";
 
@@ -196,7 +206,7 @@ impl Library {
              ON CONFLICT(path) DO UPDATE SET duration=excluded.duration, size=excluded.size, width=excluded.width, height=excluded.height,
                fps=excluded.fps, video_codec=excluded.video_codec, audio_codec=excluded.audio_codec, mtime=excluded.mtime",
             params![
-                c.path.to_string_lossy(),
+                path_key(&c.path),
                 c.title,
                 c.game,
                 c.created_at,
@@ -211,7 +221,7 @@ impl Library {
                 mtime_of(&c.path)
             ],
         )?;
-        let id: i64 = self.conn.query_row("SELECT id FROM clips WHERE path = ?1", [c.path.to_string_lossy()], |r| r.get(0))?;
+        let id: i64 = self.conn.query_row(&format!("SELECT id FROM clips WHERE {PATH_EQ}"), [path_key(&c.path)], |r| r.get(0))?;
         self.get(id)
     }
 
@@ -223,7 +233,7 @@ impl Library {
     }
 
     pub fn by_path(&self, path: &Path) -> Result<Option<Clip>> {
-        Ok(self.conn.query_row(&format!("SELECT {COLS} FROM clips WHERE path = ?1"), [path.to_string_lossy()], row_to_clip).optional()?)
+        Ok(self.conn.query_row(&format!("SELECT {COLS} FROM clips WHERE {PATH_EQ}"), [path_key(path)], row_to_clip).optional()?)
     }
 
     pub fn list(&self, q: &ClipQuery) -> Result<Vec<Clip>> {
@@ -295,7 +305,7 @@ impl Library {
         }
         self.conn.execute(
             "UPDATE clips SET title = ?2, path = ?3, mtime = ?4 WHERE id = ?1",
-            params![id, title, new_path.to_string_lossy(), mtime_of(&new_path)],
+            params![id, title, path_key(&new_path), mtime_of(&new_path)],
         )?;
         self.get(id)
     }
@@ -308,7 +318,7 @@ impl Library {
         std::fs::create_dir_all(dest_dir)?;
         let dest = vinci_storage::unique_path(dest_dir, &stem, &ext);
         vinci_storage::move_file(&clip.path, &dest)?;
-        self.conn.execute("UPDATE clips SET path = ?2 WHERE id = ?1", params![id, dest.to_string_lossy()])?;
+        self.conn.execute("UPDATE clips SET path = ?2 WHERE id = ?1", params![id, path_key(&dest)])?;
         self.get(id)
     }
 
@@ -339,7 +349,7 @@ impl Library {
     /// Change the path of a clip (used when a compressed copy replaces the original
     /// under a different extension).
     pub fn set_path(&self, id: i64, path: &Path) -> Result<Clip> {
-        self.conn.execute("UPDATE clips SET path = ?2 WHERE id = ?1", params![id, path.to_string_lossy()])?;
+        self.conn.execute("UPDATE clips SET path = ?2 WHERE id = ?1", params![id, path_key(path)])?;
         self.get(id)
     }
 
@@ -548,6 +558,21 @@ mod tests {
         let r = lib.scan(&clips, &probe).unwrap();
         assert_eq!(r, ScanReport { added: 0, removed: 1, updated: 1 });
         assert_eq!(lib.scan(&clips, &probe).unwrap(), ScanReport::default(), "idempotent");
+    }
+
+    #[test]
+    fn path_spelling_does_not_create_duplicates() {
+        let (_d, lib, clips) = setup();
+        let a = add(&lib, &clips.join("Valorant").join("x.mp4"), Some("Valorant"), 1, 10);
+        // Same file spelled with a "." component / forward slash: same row.
+        let alt = clips.join(".").join("Valorant/x.mp4");
+        assert_eq!(lib.by_path(&alt).unwrap().map(|c| c.id), Some(a.id));
+        let probe = |_: &Path| Some(media(1.0));
+        assert_eq!(lib.scan(&clips, &probe).unwrap(), ScanReport::default(), "no duplicate on sync");
+        if cfg!(windows) {
+            let upper = clips.join("VALORANT").join("X.MP4");
+            assert_eq!(lib.by_path(&upper).unwrap().map(|c| c.id), Some(a.id), "NTFS is case-insensitive");
+        }
     }
 
     #[test]

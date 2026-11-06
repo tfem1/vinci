@@ -117,8 +117,8 @@ jobs:
       - name: Package + install.sh against the result (local mirror)
         if: runner.os == 'Linux'
         run: |
-          scripts/package-archive.sh linux-x86_64 dist
-          scripts/test-install-local.sh dist linux-x86_64
+          scripts/package-archive.sh linux-x86_64 release-dist
+          scripts/test-install-local.sh release-dist linux-x86_64
       - name: scripts\install-from-source.ps1
         if: runner.os == 'Windows'
         shell: powershell

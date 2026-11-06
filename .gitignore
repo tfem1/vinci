@@ -8,3 +8,6 @@
 *.log
 .DS_Store
 /release-artifacts
+/release-dist
+/release-assets
+/artifacts

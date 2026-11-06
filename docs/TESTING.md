@@ -7,7 +7,7 @@ desktop, Rust 1.97, Node 22. No Windows machine and no Wayland compositor were a
 Legend: ✅ verified by running it · 🧪 covered by automated tests with real tools ·
 🔧 compiled & unit-tested only · ⏳ verified in CI only (GitHub runners)
 
-## Automated tests (79)
+## Automated tests (81)
 
 | Suite | Tests | What is exercised |
 |---|---|---|
@@ -15,11 +15,11 @@ Legend: ✅ verified by running it · 🧪 covered by automated tests with real 
 | `vinci-encoding` | 14 | Argument builders per encoder family and frame source (D3D11 / RGB / YUV), bitrate model, encoder selection & fallbacks, **real probes** (x264 OK, NVENC fails cleanly without a GPU), **real compression to ≤ 1 MB and real lossless trim** |
 | `vinci-replay` | 16 | Box parser, incremental demuxer (byte-by-byte = bulk), GOP-aligned eviction, byte budget, epochs, RAM vs disk ring byte-identical output, overwrite detection, **real FFmpeg → buffer → export → ffprobe** (memory + disk, across an encoder restart, without FFmpeg) |
 | `vinci-capture` | 8 | Command lines for WGC, DDA, X11/VA-API, GStreamer portal; filtergraph escaping; backend resolution; pactl parsing |
-| `vinci-clips` | 5 | SQLite CRUD, search (LIKE escaping), sort, favourites, rename (file renamed), move, delete, folder sync, migrations, real thumbnails |
+| `vinci-clips` | 6 | SQLite CRUD, search (LIKE escaping), sort, favourites, rename (file renamed), move, delete, folder sync, migrations, real thumbnails, one row per file whatever the path spelling (`a/./b`, `a\b`, case on Windows) |
 | `vinci-storage` | 3 | Atomic JSON + corruption recovery, file-name sanitising, unique names, moves, free space, leftover cleanup |
 | `vinci-games` | 4 | Database sanity (85 games), Proton/Wine detection, store-library heuristics, foreground priority, custom games |
 | `vinci-hotkeys` | 3 | Accelerator parsing/normalisation/validation, backend string formats, conflicts |
-| `vinci-update` | 5 | Ed25519 sign/verify, tampering, wrong key, semver channel rules, **end-to-end check + download + SHA-256 against a local HTTP server**, plain-HTTP refusal, AppImage atomic replacement |
+| `vinci-update` | 6 | Ed25519 sign/verify, tampering, wrong key, semver channel rules, **end-to-end check + download + SHA-256 against a local HTTP server**, plain-HTTP refusal, AppImage atomic replacement, portable-archive installs are updated by re-running the installer |
 | `vinci-engine` | 6 | **Full engine end-to-end** (RAM and disk): capture → buffer → save (video + audio + thumbnail) → library → in-place compression (no duplicate file) → ring file deleted on shutdown; live buffer resize keeps footage; settings forward-compat |
 | `vinci-app` | 3 | CLI arguments, media server (token, ids only, Range/206/416) |
 | Frontend (vitest) | 5 | Formatting, accelerator capture from keyboard events |
@@ -39,7 +39,19 @@ both `x86_64-unknown-linux-gnu` and `x86_64-pc-windows-gnu`.
 | In-game overlay on X11 | ✅ shown; on a desktop without compositor VINCI now falls back to a notification (a transparent window would be black) |
 | In-app playback | ✅ after replacing `asset://` with the loopback media server (WebKitGTK could not stream video over the custom scheme) |
 | `.deb` / `.rpm` built with `tauri build` | ✅ 8.1 MB each, correct dependencies |
-| `install.sh` against the built `.deb` from a local mirror | ✅ install, ✅ tampered package rejected, ✅ Ed25519-signed `SHA256SUMS` verified with OpenSSL, ✅ tampered `SHA256SUMS` rejected, ✅ uninstall keeps clips |
+
+## Install paths (A / B / C)
+
+| Path | Check | Result |
+|---|---|---|
+| — | `gh api repos/tfem1/vinci/releases`, `git ls-remote --tags` before the change | ✅ no release, no tag → `/releases/latest/download/*` returns 404 (the cause of the bug) |
+| C. From source, Linux | `git clone` of the branch into an empty directory → `./scripts/install-from-source.sh` | ✅ exit 0 in 7 min 30 s on the 4-vCPU VM (cold cache); `vinci` + `vinci-cli` in `~/.local/bin`, `vinci-cli --version` → `0.1.0`, menu entry written |
+| A. `install.sh` | `scripts/package-archive.sh linux-x86_64` + `scripts/test-install-local.sh` (local HTTP mirror, throw-away `$HOME`) | ✅ install, ✅ idempotent re-install, ✅ tampered archive → "checksum mismatch", ✅ missing asset → "does not contain …", ✅ no release → "not found" + from-source command |
+| A. `install.sh` signature path | key from `vinci-release-sign keygen`, `SHA256SUMS.sig` from `sign-file`, PEM injected into a copy of the script | ✅ signed release installs, ✅ tampered `SHA256SUMS` rejected, ✅ missing `.sig` rejected |
+| A. arm64 archive | Release workflow on `ubuntu-22.04-arm` | ⏳ not built locally (x86_64 VM) |
+| B. `install.ps1` / `uninstall.ps1` | Parser + PSScriptAnalyzer in CI | ⏳ PowerShell is not installed in the sandbox; not run against a real release yet |
+| C. From source, Windows | CI job `from-source (windows-latest)`: runs `install-from-source.ps1` twice, checks `vinci.exe`, `vinci-cli.exe --version`, `ffmpeg.exe`, user `PATH` (exactly one entry) | ⏳ runs on GitHub after the branch is pushed |
+| Release workflow | `.github/workflows/release.yml` | ⏳ only runs when a `v*` tag is pushed; nothing has been tagged |
 
 ## Measured resource usage (sandbox VM, **CPU encoding only**)
 
@@ -62,4 +74,5 @@ in software (60 fps without contention).
 | Hardware encoders NVENC / AMF / QSV / VA-API | 🔧 | No GPU. Command lines follow the FFmpeg 8.1 sources; every encoder is validated by a real test encode at startup and VINCI falls back automatically if one fails at runtime. |
 | Wayland (portal + PipeWire + GStreamer) and GlobalShortcuts portal | 🔧 | No compositor in the sandbox. Pipeline/argument generation is unit-tested. |
 | NSIS / MSI / AppImage packages, `install.ps1` | ⏳ | Built and linted in GitHub Actions (GitHub downloads are blocked in the sandbox, and PowerShell is not installed there). |
+| macOS | — | Not built: VINCI has no macOS capture backend. `install.sh` stops with "macOS is not supported". |
 | In-app updater applying a real update | 🔧 | Check/download/verify tested end-to-end; the final "replace and relaunch" step is per-OS (AppImage replacement unit-tested). |

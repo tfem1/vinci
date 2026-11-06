@@ -1,11 +1,11 @@
 # Package the built Windows binaries into the portable zip installed by install.ps1.
-#   powershell -File scripts\package-archive.ps1 [-Target windows-x86_64] [-Out dist]
+#   powershell -File scripts\package-archive.ps1 [-Target windows-x86_64] [-Out release-dist]
 # Expects `npx tauri build --no-bundle`, `cargo build --release -p vinci-cli` and
 # scripts\fetch-ffmpeg.ps1 to have run. Produces <Out>\vinci-<Target>.zip containing
 # vinci-<Target>\{vinci.exe, vinci-cli.exe, ffmpeg.exe, ffprobe.exe, licenses}.
 param(
     [string]$Target = 'windows-x86_64',
-    [string]$Out = 'dist',
+    [string]$Out = 'release-dist',
     [string]$Bin = 'target\release'
 )
 $ErrorActionPreference = 'Stop'

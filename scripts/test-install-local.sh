@@ -3,11 +3,11 @@
 # HTTP mirror — no GitHub, no root, a throw-away $HOME.
 # Covers: install, idempotent re-install, tampered archive, missing asset, missing release.
 #
-#   scripts/test-install-local.sh [dist-dir] [linux-x86_64|linux-arm64]
+#   scripts/test-install-local.sh [archives-dir=release-dist] [linux-x86_64|linux-arm64]
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-DIST="${1:-dist}"
+DIST="${1:-release-dist}"
 case "$(uname -m)" in aarch64|arm64) default_target=linux-arm64 ;; *) default_target=linux-x86_64 ;; esac
 TARGET="${2:-$default_target}"
 ASSET="vinci-$TARGET.tar.gz"

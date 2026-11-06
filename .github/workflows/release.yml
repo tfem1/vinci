@@ -67,18 +67,18 @@ jobs:
           cargo build --release --locked -p vinci-cli
       - name: Package archive (Linux)
         if: runner.os == 'Linux'
-        run: scripts/package-archive.sh ${{ matrix.target }} dist
+        run: scripts/package-archive.sh ${{ matrix.target }} release-dist
       - name: Package archive (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
-        run: ./scripts/package-archive.ps1 -Target ${{ matrix.target }} -Out dist
+        run: ./scripts/package-archive.ps1 -Target ${{ matrix.target }} -Out release-dist
       - name: Smoke test install.sh against the archive (local mirror)
         if: runner.os == 'Linux'
-        run: scripts/test-install-local.sh dist ${{ matrix.target }}
+        run: scripts/test-install-local.sh release-dist ${{ matrix.target }}
       - uses: actions/upload-artifact@v4
         with:
           name: archive-${{ matrix.target }}
-          path: dist/*
+          path: release-dist/*
           if-no-files-found: error
 
       # ---- optional: classic installers (a failure here does not block the release) ----

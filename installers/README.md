@@ -21,7 +21,7 @@ suffix) has been published by the Release workflow. Before that, A and B stop wi
 7. Warns if `~/.local/bin` is not in `PATH`.
 
 Options: `VINCI_VERSION`, `VINCI_BIN_DIR`, `VINCI_BASE_URL` (mirror).
-Test locally against a mirror, without GitHub or root: `scripts/test-install-local.sh dist`.
+Test locally against a mirror, without GitHub or root: `scripts/package-archive.sh linux-x86_64 && scripts/test-install-local.sh`.
 
 ## `windows/install.ps1`
 
