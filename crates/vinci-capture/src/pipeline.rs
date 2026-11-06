@@ -53,6 +53,26 @@ pub struct PipelineSpec {
     pub x11_display: Option<String>,
 }
 
+/// First Windows build whose Windows.Graphics.Capture can hide its yellow border
+/// (`IGraphicsCaptureSession3::IsBorderRequired`, Windows Server 2022 / Windows 11).
+/// FFmpeg's gfxcapture requests no border when it can; on Windows 10 (19041–19045)
+/// it cannot, so VINCI prefers Desktop Duplication there.
+pub const WGC_BORDERLESS_MIN_BUILD: u32 = 20348;
+
+pub fn wgc_can_hide_border(windows_build: Option<u32>) -> bool {
+    windows_build.is_some_and(|b| b >= WGC_BORDERLESS_MIN_BUILD)
+}
+
+/// The backend to ask for on this machine: `Auto` on Windows 10 means Desktop
+/// Duplication (no yellow capture border), everything else is unchanged.
+pub fn effective_request(requested: BackendKind, windows_build: Option<u32>) -> BackendKind {
+    if requested == BackendKind::Auto && windows_build.is_some() && !wgc_can_hide_border(windows_build) {
+        BackendKind::Dda
+    } else {
+        requested
+    }
+}
+
 /// Pick the concrete backend for a request on this machine.
 ///
 /// On Wayland only the portal backend can see the screen: X11 capture through
@@ -598,6 +618,20 @@ mod tests {
     fn wgc_window_regex_is_filtergraph_safe() {
         assert_eq!(wgc_exe_regex("VALORANT-Win64-Shipping.exe"), "(?i)^VALORANT.Win64.Shipping.exe$");
         assert_eq!(wgc_exe_regex("a:b,c[d]';.exe"), "(?i)^a.b.c.d....exe$");
+    }
+
+    #[test]
+    fn windows_10_avoids_the_yellow_wgc_border() {
+        assert_eq!(effective_request(BackendKind::Auto, Some(19045)), BackendKind::Dda, "Windows 10 22H2");
+        assert_eq!(effective_request(BackendKind::Auto, Some(22631)), BackendKind::Auto, "Windows 11 hides the border");
+        assert_eq!(effective_request(BackendKind::Wgc, Some(19045)), BackendKind::Wgc, "an explicit choice is kept");
+        assert_eq!(effective_request(BackendKind::Auto, None), BackendKind::Auto, "not Windows");
+        assert!(!wgc_can_hide_border(Some(19045)) && wgc_can_hide_border(Some(20348)));
+        // Requesting DDA still falls back to WGC when this FFmpeg has no ddagrab.
+        let only_wgc = ff(&["gfxcapture"], &[]);
+        if cfg!(windows) {
+            assert_eq!(resolve_backend(BackendKind::Dda, &only_wgc, None, DisplayServer::Windows).unwrap(), BackendKind::Wgc);
+        }
     }
 
     #[test]

@@ -36,11 +36,19 @@ export function Capture() {
   const hasHw = (c: Codec) => (hw?.probes ?? []).some((p) => p.ok && p.codec === c && p.family !== "software");
   const has = (c: Codec) => (hw?.probes ?? []).some((p) => p.ok && p.codec === c);
 
+  // Windows 10 cannot hide the Graphics Capture border (needs build 20348+).
+  const winBuild = hw?.report.system.windows_build ?? null;
+  const win10 = winBuild != null && winBuild < 20348;
   const backends: { value: BackendKind; label: string; disabled?: boolean; title?: string }[] =
     os === "windows"
       ? [
-          { value: "auto", label: "Auto" },
-          { value: "wgc", label: "Graphics Capture", disabled: !!ff && !ff.filters.includes("gfxcapture"), title: "Windows.Graphics.Capture — window or monitor, borderless games" },
+          { value: "auto", label: "Auto", title: win10 ? "Desktop Duplication on Windows 10 (no yellow border), Graphics Capture on Windows 11" : "Graphics Capture, or Desktop Duplication when it is unavailable" },
+          {
+            value: "wgc",
+            label: "Graphics Capture",
+            disabled: !!ff && !ff.filters.includes("gfxcapture"),
+            title: win10 ? "Windows.Graphics.Capture — on Windows 10 it draws a yellow border around what it records" : "Windows.Graphics.Capture — window or monitor, borderless games",
+          },
           { value: "dda", label: "Desktop Duplication", disabled: !!ff && !ff.filters.includes("ddagrab"), title: "DXGI — captures exclusive-fullscreen games" },
         ]
       : [

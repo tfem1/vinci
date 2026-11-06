@@ -516,7 +516,22 @@ impl Engine {
             fix: ffmpeg_install_command(),
         })?;
         let display = hw.report.system.display_server;
-        let backend = vinci_capture::resolve_backend(s.capture.backend, &ff, hw.report.gstreamer.as_ref(), display)?;
+        let windows_build = hw.report.system.windows_build;
+        let requested = vinci_capture::pipeline::effective_request(s.capture.backend, windows_build);
+        let backend = vinci_capture::resolve_backend(requested, &ff, hw.report.gstreamer.as_ref(), display)?;
+        let border_note = if backend == BackendKind::Wgc
+            && windows_build.is_some()
+            && !vinci_capture::pipeline::wgc_can_hide_border(windows_build)
+        {
+            Some("Windows 10 draws a yellow border around what Windows Graphics Capture records. Choose “Desktop Duplication” in Capture → Source to record without it.".to_string())
+        } else if requested == BackendKind::Dda
+            && s.capture.backend == BackendKind::Auto
+            && !matches!(s.capture.target, CaptureTarget::Monitor { .. })
+        {
+            Some("Windows 10 cannot capture a single window without a yellow border, so VINCI records the whole screen (Desktop Duplication).".to_string())
+        } else {
+            None
+        };
         let monitor = match backend {
             BackendKind::Test => MonitorInfo::synthetic(1920, 1080),
             BackendKind::Portal => {
@@ -561,7 +576,12 @@ impl Engine {
         };
         let video =
             VideoParams { codec: enc.codec, profile, width: out.0, height: out.1, fps, keyint_secs: s.encoding.keyframe_interval_secs };
-        let note = fell_back.then(|| format!("Using {} — the requested {} encoder is not available on this PC", enc.label, codec.label()));
+        let enc_note =
+            fell_back.then(|| format!("Using {} — the requested {} encoder is not available on this PC", enc.label, codec.label()));
+        let note = match (enc_note, border_note) {
+            (Some(a), Some(b)) => Some(format!("{a} · {b}")),
+            (a, b) => a.or(b),
+        };
         let spec = PipelineSpec {
             backend,
             monitor,
