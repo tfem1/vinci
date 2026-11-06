@@ -317,6 +317,16 @@ impl Updater {
     pub fn apply(&self, file: &Path) -> Result<kind::ApplyOutcome, UpdateError> {
         kind::apply(&self.kind, file)
     }
+
+    /// Download + verify + apply, except for portable (archive) installs, which are
+    /// updated by re-running the one-line installer (nothing to download here).
+    pub fn install(&self, update: &AvailableUpdate, dir: &Path, progress: impl FnMut(u64, u64)) -> Result<kind::ApplyOutcome, UpdateError> {
+        if let InstallKind::Archive { .. } = self.kind {
+            return Ok(kind::ApplyOutcome::Manual { command: kind::installer_command(&self.repo) });
+        }
+        let file = self.download(update, dir, progress)?;
+        self.apply(&file)
+    }
 }
 
 #[cfg(test)]

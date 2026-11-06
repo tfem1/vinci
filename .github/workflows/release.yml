@@ -1,8 +1,15 @@
 name: Release
 
-# Push a tag `vX.Y.Z` (stable) or `vX.Y.Z-beta.N` (beta / pre-release).
-# Required for signed updates: secret VINCI_UPDATE_SIGNING_KEY and the matching public
-# key committed in crates/vinci-update/update-public-key.txt (see docs/RELEASING.md).
+# Runs when a version tag is pushed:   git tag v0.1.0 && git push origin v0.1.0
+# A tag without a suffix (v0.1.0) becomes the "latest" release, which is what
+#   https://github.com/tfem1/vinci/releases/latest/download/<asset>
+# resolves to. Tags like v0.2.0-beta.1 are published as pre-releases and are NOT
+# served by /releases/latest/.
+#
+# Assets: vinci-linux-x86_64.tar.gz, vinci-linux-arm64.tar.gz, vinci-windows-x86_64.zip,
+#         install.sh, install.ps1, uninstall.ps1, SHA256SUMS (+ classic installers:
+#         .deb, .rpm, .AppImage, NSIS setup.exe, .msi when they build).
+# macOS is not built: VINCI has no macOS capture backend.
 
 on:
   push:
@@ -10,7 +17,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Existing tag to (re)build, e.g. v0.2.0"
+        description: "Existing tag to (re)build, e.g. v0.1.0"
         required: true
 
 permissions:
@@ -27,10 +34,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { name: linux-x86_64, os: ubuntu-22.04, ffmpeg: linux64 }
-          - { name: linux-aarch64, os: ubuntu-22.04-arm, ffmpeg: linuxarm64 }
-          - { name: windows-x64, os: windows-latest, ffmpeg: win64 }
-    name: Build ${{ matrix.name }}
+          - { target: linux-x86_64, os: ubuntu-22.04 }      # glibc 2.35 → runs on Ubuntu 22.04+, Debian 12+, Fedora, Arch
+          - { target: linux-arm64, os: ubuntu-22.04-arm }
+          - { target: windows-x86_64, os: windows-latest }
+    name: Build ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -47,35 +54,55 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libayatana-appindicator3-dev \
             librsvg2-dev libxdo-dev libssl-dev build-essential patchelf rpm file xdg-utils
-
-      - name: Bundled FFmpeg (Windows installer / AppImage)
-        shell: bash
-        run: scripts/fetch-ffmpeg.sh ${{ matrix.ffmpeg }}
-
-      - name: Build deb + rpm (system FFmpeg)
-        if: runner.os == 'Linux'
-        run: npx tauri build --bundles deb rpm
-      - name: Build AppImage (bundles FFmpeg)
-        if: runner.os == 'Linux'
-        run: npx tauri build --bundles appimage --config src-tauri/tauri.appimage.conf.json
-      - name: Build NSIS + MSI
+      - name: Bundled FFmpeg (Windows)
         if: runner.os == 'Windows'
-        run: npx tauri build --bundles nsis msi
+        shell: pwsh
+        run: ./scripts/fetch-ffmpeg.ps1
 
-      - name: Smoke test — install.sh against the freshly built .deb
-        if: matrix.name == 'linux-x86_64'
-        run: scripts/test-install-local.sh target/release/bundle
-
+      # ---- required: the portable archive used by install.sh / install.ps1 ----
+      - name: Build vinci (app) and vinci-cli
+        shell: bash   # fail on the first failing command on every OS
+        run: |
+          npx tauri build --no-bundle
+          cargo build --release --locked -p vinci-cli
+      - name: Package archive (Linux)
+        if: runner.os == 'Linux'
+        run: scripts/package-archive.sh ${{ matrix.target }} dist
+      - name: Package archive (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/package-archive.ps1 -Target ${{ matrix.target }} -Out dist
+      - name: Smoke test install.sh against the archive (local mirror)
+        if: runner.os == 'Linux'
+        run: scripts/test-install-local.sh dist ${{ matrix.target }}
       - uses: actions/upload-artifact@v4
         with:
-          name: bundles-${{ matrix.name }}
+          name: archive-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+
+      # ---- optional: classic installers (a failure here does not block the release) ----
+      - name: Classic installers (deb, rpm, AppImage)
+        if: runner.os == 'Linux'
+        continue-on-error: true
+        run: |
+          npx tauri build --bundles deb rpm
+          scripts/fetch-ffmpeg.sh $([ "${{ matrix.target }}" = linux-arm64 ] && echo linuxarm64 || echo linux64)
+          npx tauri build --bundles appimage --config src-tauri/tauri.appimage.conf.json
+      - name: Classic installers (NSIS, MSI)
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        run: npx tauri build --bundles nsis msi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installers-${{ matrix.target }}
           path: |
             target/release/bundle/deb/*.deb
             target/release/bundle/rpm/*.rpm
             target/release/bundle/appimage/*.AppImage
             target/release/bundle/nsis/*-setup.exe
             target/release/bundle/msi/*.msi
-          if-no-files-found: error
+          if-no-files-found: ignore
 
   publish:
     name: Publish GitHub release
@@ -87,13 +114,16 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: actions/download-artifact@v4
         with: { path: artifacts }
-      - name: Stable names, SHA256SUMS, signature, update manifest
+      - name: Assets, SHA256SUMS (+ signature and update manifest when the signing key is set)
         env:
           VINCI_UPDATE_SIGNING_KEY: ${{ secrets.VINCI_UPDATE_SIGNING_KEY }}
         run: |
           CHANNEL=stable; case "$TAG" in *-*) CHANNEL=beta ;; esac
           echo "CHANNEL=$CHANNEL" >> "$GITHUB_ENV"
           scripts/package-release.sh "${TAG#v}" artifacts release-assets "$CHANNEL"
+          for a in vinci-linux-x86_64.tar.gz vinci-linux-arm64.tar.gz vinci-windows-x86_64.zip install.sh install.ps1 SHA256SUMS; do
+            test -f "release-assets/$a" || { echo "required asset missing: $a"; exit 1; }
+          done
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}

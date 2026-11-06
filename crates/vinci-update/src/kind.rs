@@ -20,6 +20,11 @@ pub enum InstallKind {
     },
     Deb,
     Rpm,
+    /// Portable archive installed by `install.sh` (~/.local/bin) or `install.ps1`
+    /// (%LOCALAPPDATA%\vinci). Updated by re-running the installer.
+    Archive {
+        exe: PathBuf,
+    },
     /// Built from source / unknown.
     Source,
 }
@@ -32,11 +37,12 @@ impl InstallKind {
             InstallKind::AppImage { .. } => "appimage",
             InstallKind::Deb => "deb",
             InstallKind::Rpm => "rpm",
+            InstallKind::Archive { .. } => "archive",
             InstallKind::Source => "source",
         }
     }
     pub fn can_self_update(&self) -> bool {
-        !matches!(self, InstallKind::Source)
+        !matches!(self, InstallKind::Source | InstallKind::Archive { .. })
     }
 }
 
@@ -54,7 +60,15 @@ pub fn detect_install_kind() -> InstallKind {
         if s.contains("program files") {
             return InstallKind::WindowsMsi { exe };
         }
+        if let Some(local) = std::env::var_os("LOCALAPPDATA") {
+            if dir.to_string_lossy().eq_ignore_ascii_case(&PathBuf::from(local).join("vinci").to_string_lossy()) {
+                return InstallKind::Archive { exe };
+            }
+        }
         return InstallKind::Source;
+    }
+    if exe.parent().is_some_and(|d| d.ends_with(".local/bin")) {
+        return InstallKind::Archive { exe };
     }
     if exe.starts_with("/usr") {
         if Path::new("/var/lib/dpkg/info/vinci.list").exists() {
@@ -85,6 +99,15 @@ pub enum ApplyOutcome {
     ExitNow,
     /// Cannot install automatically: show this command to the user.
     Manual { command: String },
+}
+
+/// The one-line installer that updates a portable (archive) installation in place.
+pub fn installer_command(repo: &str) -> String {
+    if cfg!(windows) {
+        format!("irm https://github.com/{repo}/releases/latest/download/install.ps1 | iex")
+    } else {
+        format!("curl -fsSL https://github.com/{repo}/releases/latest/download/install.sh | bash")
+    }
 }
 
 pub fn apply(kind: &InstallKind, file: &Path) -> Result<ApplyOutcome, UpdateError> {
@@ -138,7 +161,8 @@ pub fn apply(kind: &InstallKind, file: &Path) -> Result<ApplyOutcome, UpdateErro
                 None => Ok(ApplyOutcome::Manual { command: manual }),
             }
         }
-        InstallKind::Source => Ok(ApplyOutcome::Manual { command: "git pull && npm ci && npm run tauri build".into() }),
+        InstallKind::Archive { .. } => Ok(ApplyOutcome::Manual { command: installer_command("tfem1/vinci") }),
+        InstallKind::Source => Ok(ApplyOutcome::Manual { command: "git pull && ./scripts/install-from-source.sh".into() }),
     }
 }
 
@@ -159,6 +183,16 @@ mod tests {
         assert_eq!(std::fs::read(&target).unwrap(), b"new");
         use std::os::unix::fs::PermissionsExt;
         assert_eq!(std::fs::metadata(&target).unwrap().permissions().mode() & 0o777, 0o755);
+    }
+
+    #[test]
+    fn archive_install_is_updated_by_the_installer() {
+        let k = InstallKind::Archive { exe: PathBuf::from("/home/u/.local/bin/vinci") };
+        assert!(!k.can_self_update());
+        match apply(&k, Path::new("unused")).unwrap() {
+            ApplyOutcome::Manual { command } => assert!(command.contains("releases/latest/download/install."), "{command}"),
+            other => panic!("unexpected {other:?}"),
+        }
     }
 
     #[test]

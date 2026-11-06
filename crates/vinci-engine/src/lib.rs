@@ -1070,9 +1070,7 @@ impl Engine {
         upd: &vinci_update::AvailableUpdate,
         progress: impl FnMut(u64, u64),
     ) -> std::result::Result<vinci_update::kind::ApplyOutcome, String> {
-        let u = self.updater();
-        let file = u.download(upd, &self.0.paths.cache_dir.join("updates"), progress).map_err(|e| e.to_string())?;
-        u.apply(&file).map_err(|e| e.to_string())
+        self.updater().install(upd, &self.0.paths.cache_dir.join("updates"), progress).map_err(|e| e.to_string())
     }
 
     pub fn install_kind(&self) -> vinci_update::InstallKind {

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Collect Tauri bundles under stable names, write SHA256SUMS, sign it and build the
-# signed update manifest (vinci-update.json).
+# Collect the portable archives and Tauri bundles under stable names, write
+# SHA256SUMS, sign it and build the signed update manifest (vinci-update.json).
 #
 #   scripts/package-release.sh <version> <input-dir> <output-dir> [stable|beta]
 #
@@ -32,10 +32,14 @@ while IFS= read -r -d '' f; do
     *_aarch64.AppImage)     add "$f" VINCI-linux-aarch64.AppImage linux-aarch64-appimage ;;
     *_x64-setup.exe)        add "$f" VINCI-windows-x64-setup.exe  windows-x86_64-nsis ;;
     *_x64_en-US.msi)        add "$f" VINCI-windows-x64.msi        windows-x86_64-msi ;;
+    # Portable archives (install.sh / install.ps1) — already named by package-archive.*
+    vinci-linux-x86_64.tar.gz)  add "$f" "$b" linux-x86_64-archive ;;
+    vinci-linux-arm64.tar.gz)   add "$f" "$b" linux-aarch64-archive ;;
+    vinci-windows-x86_64.zip)   add "$f" "$b" windows-x86_64-archive ;;
   esac
-done < <(find "$IN" -type f \( -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' -o -name '*-setup.exe' -o -name '*.msi' \) -print0)
+done < <(find "$IN" -type f \( -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' -o -name '*-setup.exe' -o -name '*.msi' -o -name 'vinci-*.tar.gz' -o -name 'vinci-*.zip' \) -print0)
 
-[ "${#KEYS[@]}" -gt 0 ] || { echo "no bundles found in $IN" >&2; exit 1; }
+[ "${#KEYS[@]}" -gt 0 ] || { echo "no release files found in $IN" >&2; exit 1; }
 
 # Installer scripts are published with every release (stable install URLs).
 cp installers/linux/install.sh installers/windows/install.ps1 installers/windows/uninstall.ps1 "$OUT/"
