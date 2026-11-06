@@ -25,7 +25,8 @@ const settings: Settings = {
 
 const started = Date.now() - 41_000;
 let running = true;
-// `?scenario=wayland-missing` previews the KDE/Wayland "plugins missing" error state.
+// `?scenario=wayland-missing` previews the KDE/Wayland "plugins missing" error state;
+// `?scenario=first-run` previews a running buffer with no clips yet.
 const scenario = typeof location !== "undefined" ? new URLSearchParams(location.search).get("scenario") : null;
 if (scenario === "wayland-missing") running = false;
 const status = (): EngineStatus => ({
@@ -154,6 +155,7 @@ export async function mockInvoke<T>(cmd: string, args: Record<string, unknown> =
       return r({ app_cpu_percent: 0.6 + Math.random() * 0.4, app_ram_bytes: 58e6 + Math.random() * 3e6, sys_cpu_percent: 31 + Math.random() * 8, sys_ram_used_bytes: 14.2e9, sys_ram_total_bytes: 32e9, gpus: [{ name: "NVIDIA GeForce RTX 4070", util_percent: 71 + Math.random() * 6, encoder_percent: 9 + Math.random() * 3, vram_used_bytes: 7.1e9, vram_total_bytes: 12e9 }] });
     case "list_clips": {
       const q = (args.query ?? {}) as { search?: string; game?: string; favorites_only?: boolean; sort?: string; limit?: number };
+      if (scenario === "first-run") return r([]);
       let out = clips.filter((c) => (!q.search || (c.title + (c.game ?? "")).toLowerCase().includes(q.search.toLowerCase())) && (!q.game || c.game === q.game) && (!q.favorites_only || c.favorite));
       const sorters: Record<string, (a: Clip, b: Clip) => number> = { newest: (a, b) => b.created_at - a.created_at, oldest: (a, b) => a.created_at - b.created_at, largest: (a, b) => b.size - a.size, smallest: (a, b) => a.size - b.size, longest: (a, b) => b.duration - a.duration, shortest: (a, b) => a.duration - b.duration, name: (a, b) => a.title.localeCompare(b.title) };
       out = [...out].sort(sorters[q.sort ?? "newest"]);
