@@ -30,6 +30,8 @@ pub struct ExportResult {
     pub duration_secs: f64,
     /// `false` when FFmpeg was unavailable/failed and the raw fragmented MP4 was kept.
     pub remuxed: bool,
+    /// Why the remux failed (FFmpeg's error output), when it did.
+    pub remux_error: Option<String>,
 }
 
 /// Hook to customise how FFmpeg is spawned (e.g. hide the console on Windows).
@@ -68,11 +70,13 @@ pub fn export(snapshot: &Snapshot, dest: &Path, ffmpeg: Option<&Path>, make_cmd:
 
     // 2. remux
     let tmp = dir.join(format!(".{stem}.vinci-tmp"));
+    let mut remux_error = None;
     let remuxed = match ffmpeg {
         Some(ff) => match remux(ff, &parts, &tmp, &dir, &stem, make_cmd) {
             Ok(()) => true,
             Err(e) => {
                 log::warn!("remux failed, keeping fragmented MP4: {e}");
+                remux_error = Some(e.to_string());
                 let _ = std::fs::remove_file(&tmp);
                 false
             }
@@ -91,7 +95,7 @@ pub fn export(snapshot: &Snapshot, dest: &Path, ffmpeg: Option<&Path>, make_cmd:
         cleanup(&parts);
     }
     let bytes = std::fs::metadata(dest)?.len();
-    Ok(ExportResult { path: dest.to_path_buf(), bytes, duration_secs: snapshot.duration, remuxed })
+    Ok(ExportResult { path: dest.to_path_buf(), bytes, duration_secs: snapshot.duration, remuxed, remux_error })
 }
 
 fn remux(ffmpeg: &Path, parts: &[PathBuf], tmp: &Path, dir: &Path, stem: &str, make_cmd: &CommandFactory) -> io::Result<()> {
@@ -129,12 +133,24 @@ mod tests {
     use crate::stream::{Fmp4Demuxer, Fmp4Event};
     use std::io::Read;
 
+    /// The FFmpeg VINCI ships (`VINCI_FFMPEG`, as in CI), else the one on PATH.
     fn ffmpeg() -> Option<PathBuf> {
+        if let Some(p) = std::env::var_os("VINCI_FFMPEG").map(PathBuf::from).filter(|p| p.exists()) {
+            return Some(p);
+        }
         let p = std::env::var_os("PATH")?;
         std::env::split_paths(&p).map(|d| d.join(if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" })).find(|p| p.exists())
     }
     fn ffprobe_duration(file: &Path) -> (f64, usize) {
-        let out = Command::new("ffprobe")
+        // ffprobe next to the FFmpeg in use (bundled: ffprobe-<triple>.exe), else PATH.
+        let probe = ffmpeg()
+            .and_then(|f| {
+                let name = f.file_name()?.to_string_lossy().replacen("ffmpeg", "ffprobe", 1);
+                Some(f.with_file_name(name))
+            })
+            .filter(|p| p.exists())
+            .unwrap_or_else(|| PathBuf::from("ffprobe"));
+        let out = Command::new(probe)
             .args(["-v", "error", "-show_entries", "format=duration:stream=codec_type", "-of", "default=nw=1"])
             .arg(file)
             .output()
@@ -204,7 +220,7 @@ mod tests {
             let snap = buf.snapshot(8.0).unwrap();
             let dest = dir.path().join(format!("clip-{disk}.mp4"));
             let r = export(&snap, &dest, Some(&ff), &cmd).unwrap();
-            assert!(r.remuxed);
+            assert!(r.remuxed, "remux failed with {}: {:?}", ff.display(), r.remux_error);
             let (dur, streams) = ffprobe_duration(&dest);
             assert!((8.0..=10.2).contains(&dur), "duration {dur}");
             assert_eq!(streams, 2, "video + audio");
@@ -229,7 +245,7 @@ mod tests {
         assert_eq!(snap.parts.len(), 2);
         let dest = dir.path().join("joined.mp4");
         let r = export(&snap, &dest, Some(&ff), &cmd).unwrap();
-        assert!(r.remuxed);
+        assert!(r.remuxed, "remux failed with {}: {:?}", ff.display(), r.remux_error);
         let (dur, _) = ffprobe_duration(&dest);
         assert!((10.0..=12.5).contains(&dur), "duration {dur}");
     }

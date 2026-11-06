@@ -74,7 +74,7 @@ jobs:
       - name: Tests (engine crates + app)
         env:
           VINCI_FFMPEG: ${{ github.workspace }}\src-tauri\binaries\ffmpeg-x86_64-pc-windows-msvc.exe
-        run: cargo test --workspace
+        run: cargo test --workspace --no-fail-fast
       - name: FFmpeg capabilities (gfxcapture = WGC, ddagrab = DDA)
         shell: pwsh
         run: |
