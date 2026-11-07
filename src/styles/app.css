@@ -369,3 +369,6 @@ details.details > .grid .drivers { grid-column: 1 / -1; order: 10; }
 
 .spin { animation: spin 0.9s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* Window not in use (e.g. you are playing): freeze animations so the webview stops repainting. */
+.idle *, .idle *::before, .idle *::after { animation-play-state: paused !important; transition: none !important; }

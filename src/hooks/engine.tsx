@@ -134,7 +134,8 @@ function ensureStatsTimer(intervalMs: number) {
   if (statsTimer) clearInterval(statsTimer);
   statsInterval = intervalMs;
   const tick = () => {
-    if (document.visibilityState !== "visible") return;
+    // Only while the window is visible and in use (not while you are in a game).
+    if (document.visibilityState !== "visible" || !document.hasFocus()) return;
     api.stats().then((x) => {
       statsValue = x;
       statsSubs.forEach((f) => f(x));

@@ -16,6 +16,15 @@ async function boot() {
   window.addEventListener("contextmenu", (e) => {
     if (!(e.target as HTMLElement).closest("input, textarea")) e.preventDefault();
   });
+  // While you play, the VINCI window is unfocused: stop its animations so the
+  // webview does not keep repainting at the screen's refresh rate next to the game.
+  if (label !== "overlay") {
+    const idle = () => document.documentElement.classList.toggle("idle", document.hidden || !document.hasFocus());
+    window.addEventListener("focus", idle);
+    window.addEventListener("blur", idle);
+    document.addEventListener("visibilitychange", idle);
+    idle();
+  }
   createRoot(document.getElementById("root")!).render(<StrictMode>{label === "overlay" ? <Overlay /> : <App />}</StrictMode>);
 }
 

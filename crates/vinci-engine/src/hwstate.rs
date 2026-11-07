@@ -23,7 +23,10 @@ impl HwState {
 /// Detect, reusing cached probe results when the machine fingerprint is unchanged.
 pub fn load_or_detect(cache: &Path, explicit_ffmpeg: Option<&Path>, force: bool) -> HwState {
     let report = vinci_hw::detect(explicit_ffmpeg);
-    let fingerprint = report.fingerprint();
+    // Bump when the probe / live encoder arguments change, so cached results are
+    // re-validated with the new options.
+    const PROBE_REVISION: u32 = 2;
+    let fingerprint = format!("{}#probe{PROBE_REVISION}", report.fingerprint());
     let hw = vinci_encoding::default_hw_context(&report.gpus);
     if !force {
         if let Ok(bytes) = std::fs::read(cache) {

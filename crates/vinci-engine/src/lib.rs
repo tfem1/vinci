@@ -611,7 +611,13 @@ impl Engine {
             audio_kbps: vinci_encoding::profile::audio_kbps(profile),
             frag_ms: s.advanced.fragment_ms,
             audio_offset_ms: s.advanced.audio_offset_ms,
-            priority: s.performance.capture_priority,
+            // CPU encoding competes with the game for cores: the game keeps priority
+            // (a dropped capture frame is better than a dropped game frame).
+            priority: if enc.family == vinci_encoding::EncoderFamily::Software {
+                vinci_capture::Priority::BelowNormal
+            } else {
+                s.performance.capture_priority
+            },
             portal_restore_token: s.portal_restore_token.clone(),
             x11_display: None,
         };

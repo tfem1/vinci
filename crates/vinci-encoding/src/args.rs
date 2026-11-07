@@ -202,17 +202,20 @@ pub fn encoder_args(enc: &EncoderInfo, p: &VideoParams, rc: RateControl) -> Vec<
 
     match enc.family {
         EncoderFamily::Nvenc => {
+            // Live capture runs next to a game: keep NVENC on its own chip. Adaptive
+            // quantization and look-ahead run on the CUDA cores the game renders with,
+            // multi-pass doubles the encoder work. Offline encodes (`offline_quality`)
+            // turn the quality features back on.
             let preset = match p.profile {
-                Q::Quality => "p5",
-                Q::Balanced => "p4",
-                Q::Compact => "p5",
+                Q::Quality => "p4",
+                Q::Balanced | Q::Compact => "p3",
             };
-            a.extend(s(["-preset", preset, "-tune", "hq", "-rc", "vbr"]));
+            a.extend(s(["-preset", preset, "-tune", "hq", "-rc", "vbr", "-multipass", "disabled", "-rc-lookahead", "0"]));
             match rc {
                 RateControl::Quality => a.extend(s(["-cq".to_string(), q, "-b:v".into(), "0".into()])),
                 RateControl::Bitrate(_) => a.extend(s(["-b:v".to_string(), k(target)])),
             }
-            a.extend(s(["-maxrate".to_string(), k(peak), "-bufsize".into(), k(peak * 2), "-spatial-aq".into(), "1".into()]));
+            a.extend(s(["-maxrate".to_string(), k(peak), "-bufsize".into(), k(peak * 2)]));
         }
         EncoderFamily::Amf => {
             let quality = match p.profile {
@@ -250,12 +253,13 @@ pub fn encoder_args(enc: &EncoderInfo, p: &VideoParams, rc: RateControl) -> Vec<
         }
         EncoderFamily::Software => {
             let (preset, rc_args) = match (p.codec, rc) {
-                (Codec::H264, RateControl::Quality) => ("veryfast", s(["-crf".to_string(), q])),
+                // Live CPU encoding competes with the game for cores: fastest sane presets.
+                (Codec::H264, RateControl::Quality) => ("superfast", s(["-crf".to_string(), q])),
                 (Codec::Hevc, RateControl::Quality) => ("ultrafast", s(["-crf".to_string(), q])),
-                (Codec::Av1, RateControl::Quality) => ("10", s(["-crf".to_string(), q])),
-                (Codec::H264, RateControl::Bitrate(_)) => ("veryfast", s(["-b:v".to_string(), k(target)])),
+                (Codec::Av1, RateControl::Quality) => ("12", s(["-crf".to_string(), q])),
+                (Codec::H264, RateControl::Bitrate(_)) => ("superfast", s(["-b:v".to_string(), k(target)])),
                 (Codec::Hevc, RateControl::Bitrate(_)) => ("ultrafast", s(["-b:v".to_string(), k(target)])),
-                (Codec::Av1, RateControl::Bitrate(_)) => ("10", s(["-b:v".to_string(), k(target)])),
+                (Codec::Av1, RateControl::Bitrate(_)) => ("12", s(["-b:v".to_string(), k(target)])),
             };
             a.extend(s(["-preset", preset]));
             a.extend(rc_args);
@@ -294,6 +298,22 @@ mod tests {
     }
 
     #[test]
+    fn live_settings_spare_the_game() {
+        // NVENC: no CUDA-side features (adaptive quantization, look-ahead), no multi-pass.
+        for id in ["h264_nvenc", "hevc_nvenc", "av1_nvenc"] {
+            let enc = find(id).unwrap();
+            let a = encoder_args(enc, &params(enc.codec), RateControl::Quality).join(" ");
+            assert!(!a.contains("spatial-aq") && !a.contains("temporal-aq"), "{a}");
+            assert!(a.contains("-preset p3 -tune hq -rc vbr -multipass disabled -rc-lookahead 0"), "{a}");
+        }
+        // CPU fallback: fastest sane presets.
+        let x264 = encoder_args(find("libx264").unwrap(), &params(Codec::H264), RateControl::Quality).join(" ");
+        assert!(x264.contains("-preset superfast"), "{x264}");
+        let svt = encoder_args(find("libsvtav1").unwrap(), &params(Codec::Av1), RateControl::Quality).join(" ");
+        assert!(svt.contains("-preset 12"), "{svt}");
+    }
+
+    #[test]
     fn nvenc_d3d11_zero_copy() {
         let enc = find("hevc_nvenc").unwrap();
         let plan = plan_video(
@@ -307,7 +327,7 @@ mod tests {
         );
         assert_eq!(plan.filter, None, "no download / conversion for NVENC from D3D11");
         let a = plan.encoder_args.join(" ");
-        assert!(a.contains("-rc vbr -cq 25 -b:v 0"), "{a}");
+        assert!(a.contains("-rc vbr -multipass disabled -rc-lookahead 0 -cq 25 -b:v 0"), "{a}");
         assert!(a.contains("-g 120") && a.contains("-tag:v hvc1"));
     }
 
@@ -366,7 +386,7 @@ mod tests {
         );
         assert_eq!(plan.filter.as_deref(), Some("hwdownload,format=bgra,format=yuv420p"));
         let a = plan.encoder_args.join(" ");
-        assert!(a.contains("-preset veryfast -b:v 3000k -maxrate 3750k"), "{a}");
+        assert!(a.contains("-preset superfast -b:v 3000k -maxrate 3750k"), "{a}");
     }
 
     #[test]

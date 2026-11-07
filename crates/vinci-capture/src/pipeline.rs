@@ -487,7 +487,7 @@ fn gst_video_encoder(spec: &PipelineSpec, gst: &GstInfo, w: u32, h: u32, kbps: u
     // CPU fallback (always H.264 when the codec's software encoder is missing).
     let (sw, parse, actual) = if !sw.is_empty() && gst.has(sw) { (sw, parse, codec) } else { ("x264enc", "h264parse", Codec::H264) };
     let opts = if sw == "x264enc" {
-        format!("speed-preset=veryfast bitrate={kbps} key-int-max={gop}")
+        format!("speed-preset=superfast bitrate={kbps} key-int-max={gop}")
     } else {
         format!("speed-preset=ultrafast bitrate={kbps} key-int-max={gop}")
     };
@@ -696,7 +696,7 @@ mod tests {
         let gst2 =
             GstInfo { launch: "x".into(), elements: ["pipewiresrc", "x264enc"].iter().map(|s| s.to_string()).collect(), cuda_nvenc: false };
         let (a2, c2) = gst_portal_args(&sp, &gst2, Some(3), 1);
-        assert!(a2.join(" ").contains("x264enc speed-preset=veryfast"));
+        assert!(a2.join(" ").contains("x264enc speed-preset=superfast"));
         assert_eq!(c2, Codec::H264, "real codec reported when falling back");
         assert!(a.contains("! video/x-raw,max-framerate=60/1 ! videorate"), "{a}");
         // NVIDIA: GPU conversion only when the CUDA probe succeeded.

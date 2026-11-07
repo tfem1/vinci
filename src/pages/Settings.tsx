@@ -194,7 +194,7 @@ export function Settings() {
           <Setting title="Free UI memory when hidden" desc="Closes the interface process when VINCI is in the tray (≈ 60–150 MB saved).">
             <Toggle on={s.performance.free_ui_when_hidden} onChange={(v) => update((x) => void (x.performance.free_ui_when_hidden = v))} />
           </Setting>
-          <Setting title="Capture priority" desc="Above normal avoids dropped frames when the game saturates the CPU.">
+          <Setting title="Capture priority" desc="For GPU encoding. Above normal avoids dropped frames when the game saturates the CPU; CPU encoding always runs below the game.">
             <Seg<Priority>
               value={s.performance.capture_priority}
               onChange={(v) => update((x) => void (x.performance.capture_priority = v))}

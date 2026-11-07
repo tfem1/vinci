@@ -208,10 +208,11 @@ pub fn compress(
         let scale = if (w, h) != (info.width, info.height) { Some((w, h)) } else { None };
         let params = VideoParams { codec: job.encoder.codec, profile, width: w, height: h, fps, keyint_secs: 4.0 };
         let mut plan = plan_video(job.encoder, &params, rc, FrameSource::SystemYuv, scale, FilterCaps::from_ffmpeg(job.ffmpeg), job.hw);
-        // Offline encodes can afford slower, more efficient CPU presets.
+        // Offline encodes can afford slower, more efficient presets.
         if job.encoder.family == EncoderFamily::Software {
             slow_down_software_preset(&mut plan.encoder_args, job.encoder.codec);
         }
+        offline_quality(&mut plan.encoder_args, job.encoder.family);
         let mut args: Vec<String> = vec!["-hide_banner".into(), "-nostdin".into(), "-y".into(), "-loglevel".into(), "error".into()];
         args.extend(plan.global_args);
         args.push("-i".into());
@@ -251,6 +252,20 @@ pub fn compress(
         progress(1.0);
         return Ok(CompressResult { output: output.to_path_buf(), size_bytes: size, attempts, encoder: job.encoder.id.to_string() });
     }
+}
+
+/// NVENC: the live settings leave quality features off to spare the game's GPU;
+/// compressing a clip is offline, so use a slower preset and adaptive quantization.
+pub fn offline_quality(args: &mut Vec<String>, family: EncoderFamily) {
+    if family != EncoderFamily::Nvenc {
+        return;
+    }
+    if let Some(i) = args.iter().position(|a| a == "-preset") {
+        if let Some(v) = args.get_mut(i + 1) {
+            *v = "p5".into();
+        }
+    }
+    args.extend(["-spatial-aq".to_string(), "1".to_string()]);
 }
 
 fn slow_down_software_preset(args: &mut [String], codec: Codec) {
@@ -372,6 +387,26 @@ pub fn run_ffmpeg_progress(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn offline_compression_gets_quality_back() {
+        let enc = crate::catalog::find("h264_nvenc").unwrap();
+        let p = crate::VideoParams {
+            codec: enc.codec,
+            profile: crate::QualityProfile::Balanced,
+            width: 1920,
+            height: 1080,
+            fps: 60,
+            keyint_secs: 4.0,
+        };
+        let mut a = crate::args::encoder_args(enc, &p, crate::RateControl::Bitrate(8000));
+        super::offline_quality(&mut a, enc.family);
+        let s = a.join(" ");
+        assert!(s.contains("-preset p5") && s.ends_with("-spatial-aq 1"), "{s}");
+        let mut x = vec!["-preset".to_string(), "superfast".to_string()];
+        super::offline_quality(&mut x, crate::EncoderFamily::Software);
+        assert_eq!(x, ["-preset", "superfast"], "only NVENC is changed here");
+    }
+
     use super::*;
 
     #[test]
