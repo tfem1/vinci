@@ -3,7 +3,7 @@
 
 import type {
   AppInfo, AudioDevice, AvailableUpdate, Clip, ClipQuery, CompressOptions, EngineEvent, EngineStatus, Estimate,
-  HotkeyStatus, HwState, LibraryStats, MonitorInfo, ResourceStats, Settings,
+  HotkeyStatus, HwState, LibraryStats, MonitorInfo, ResourceStats, Settings, SystemCheck,
 } from "./types";
 
 export const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -57,6 +57,8 @@ export const api = {
   installUpdate: (update: AvailableUpdate) => invoke<string>("install_update", { update }),
   appInfo: () => invoke<AppInfo>("get_app_info"),
   hotkeyStatus: () => invoke<HotkeyStatus | null>("hotkey_status"),
+  systemCheck: () => invoke<SystemCheck>("system_check"),
+  openLink: (url: string) => invoke<void>("open_link", { url }),
   validateHotkey: (accelerator: string) => invoke<string>("validate_hotkey", { accelerator }),
   setAutostart: (enabled: boolean) => invoke<void>("set_autostart", { enabled }),
   previewOverlay: () => invoke<void>("preview_overlay"),

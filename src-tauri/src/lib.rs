@@ -329,6 +329,8 @@ pub fn run() {
             commands::preview_overlay,
             commands::pick_folder,
             commands::media_url,
+            commands::system_check,
+            commands::open_link,
         ])
         .build(tauri::generate_context!())
         .expect("error while building VINCI");

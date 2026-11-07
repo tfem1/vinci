@@ -208,6 +208,25 @@ details.details > summary:hover { color: var(--text); }
 details.details .chev { transition: transform 0.15s; }
 details.details[open] .chev { transform: rotate(90deg); }
 details.details > .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 0 14px 14px; }
+details.issues { margin-top: 14px; padding: 0; }
+details.issues > summary { list-style: none; cursor: pointer; padding: 14px 18px; font-size: 13px; font-weight: 560; display: flex; align-items: center; gap: 8px; user-select: none; }
+details.issues > summary::-webkit-details-marker { display: none; }
+details.issues .chev { transition: transform 0.15s; color: var(--muted); }
+details.issues[open] .chev { transform: rotate(90deg); }
+.bad { color: #ff8a8a; }
+.ok { color: var(--text); }
+.issue-list { display: grid; gap: 10px; padding: 0 18px 16px; }
+.issue { display: grid; gap: 6px; padding: 12px 14px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--elevated); font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+.issue b { color: var(--text); font-weight: 560; font-size: 13px; }
+.issue.warning { border-color: #4a2526; background: #160d0d; }
+.issue-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 2px; }
+.issue-actions .fix-cmd { flex: 1; min-width: 260px; }
+.fix-cmd.plain { background: #0d0d0d; border-color: var(--line); }
+.fix-cmd.plain code { color: var(--text); }
+details.details > .grid .drivers { grid-column: 1 / -1; order: 10; }
+.driver-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; font-size: 12.5px; }
+.driver-list li { display: grid; grid-template-columns: 16px minmax(0, 1.2fr) minmax(0, 1.4fr) auto; gap: 10px; align-items: center; }
+.driver-list li b { font-weight: 540; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 900px) {
   .steps, details.details > .grid { grid-template-columns: minmax(0, 1fr); }
 }

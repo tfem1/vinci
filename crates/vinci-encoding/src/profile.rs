@@ -29,11 +29,11 @@ impl QualityProfile {
         }
     }
     /// Preferred codec when the user leaves codec on "Auto".
+    /// Codec used when the user leaves it on Auto: H.264 for every profile, because it
+    /// plays everywhere (Windows' built-in player without paid extensions, Discord,
+    /// phones, browsers). HEVC/AV1 are smaller but must be chosen explicitly.
     pub fn preferred_codec(self) -> Codec {
-        match self {
-            QualityProfile::Quality | QualityProfile::Balanced => Codec::Hevc,
-            QualityProfile::Compact => Codec::Av1,
-        }
+        Codec::H264
     }
 }
 

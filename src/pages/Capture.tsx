@@ -141,12 +141,19 @@ export function Capture() {
                   options={[30, 60, 120, 144].map((f) => ({ value: f, label: `${f}`, title: f > 60 ? "Requires a fast GPU encoder" : undefined }))}
                 />
               </Setting>
-              <Setting title="Codec" desc="Auto picks HEVC (AV1 for Compact) when your GPU can encode it.">
+              <Setting
+                title="Codec"
+                desc={
+                  s.encoding.codec === "hevc" || s.encoding.codec === "av1"
+                    ? "Smaller files, but these clips don’t play everywhere (Discord, some phones; Windows’ player needs an extension — VLC plays them)."
+                    : "Auto = H.264: plays everywhere (Windows player, Discord, phones, browsers). HEVC/AV1 make smaller files."
+                }
+              >
                 <Seg<CodecChoice>
                   value={s.encoding.codec}
                   onChange={(v) => update((x) => void (x.encoding.codec = v))}
                   options={[
-                    { value: "auto", label: "Auto" },
+                    { value: "auto", label: "Auto", title: "H.264 — the most compatible" },
                     { value: "h264", label: "H.264", disabled: !!hw && !has("h264") },
                     { value: "hevc", label: hasHw("hevc") || !hw ? "HEVC" : "HEVC (CPU)", disabled: !!hw && !has("hevc") },
                     { value: "av1", label: hasHw("av1") || !hw ? "AV1" : "AV1 (CPU)", disabled: !!hw && !has("av1") },

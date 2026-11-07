@@ -26,7 +26,8 @@ const settings: Settings = {
 const started = Date.now() - 41_000;
 let running = true;
 // `?scenario=wayland-missing` previews the KDE/Wayland "plugins missing" error state;
-// `?scenario=first-run` previews a running buffer with no clips yet.
+// `?scenario=first-run` previews a running buffer with no clips yet;
+// `?scenario=arch-laptop` previews the system check on a hybrid Arch laptop.
 const scenario = typeof location !== "undefined" ? new URLSearchParams(location.search).get("scenario") : null;
 if (scenario === "wayland-missing") running = false;
 const status = (): EngineStatus => ({
@@ -151,11 +152,37 @@ export async function mockInvoke<T>(cmd: string, args: Record<string, unknown> =
       const per = { quality: 120, balanced: 69, compact: 42 }[s.encoding.profile] * (s.capture.fps / 60) ** 0.6;
       return r({ width: 2560, height: 1440, fps: s.capture.fps, codec: "hevc", mb_per_minute: per, buffer_mb: (per * s.replay.buffer_secs) / 60, buffer_storage: (per * s.replay.buffer_secs) / 60 > s.replay.max_ram_mb ? "disk" : "memory", clip_mb: [30, 60, 120, 180, 300].map((x) => [x, (per * x) / 60]) });
     }
+    case "system_check": {
+      // `?scenario=arch-laptop`: RTX 4050 + Intel iGPU without VA-API driver, no video player.
+      const laptop = scenario === "arch-laptop";
+      return r({
+        drivers: laptop
+          ? [
+              { gpu: "NVIDIA GeForce RTX 4050 Laptop GPU", vendor: "nvidia", driver: "nvidia 580.95.05", encoder_api: "NVENC", encoder_ok: true, problem: null, fix: null, link: null, optional: false },
+              { gpu: "Intel UHD Graphics", vendor: "intel", driver: "i915", encoder_api: "VA-API", encoder_ok: false, problem: "The VA-API video driver for this Intel GPU is not installed, so it cannot encode video.", fix: "sudo pacman -S --needed intel-media-driver", link: null, optional: true },
+            ]
+          : [{ gpu: "NVIDIA GeForce RTX 4070", vendor: "nvidia", driver: "NVIDIA 566.36 (32.0.15.6636)", encoder_api: "NVENC", encoder_ok: true, problem: null, fix: null, link: "https://www.nvidia.com/Download/index.aspx", optional: false }],
+        players: laptop
+          ? { players: [], default_handler: null, plays_everything: false, hevc_extension: null, av1_extension: null }
+          : { players: ["VLC", "Windows Media Player (H.264)"], default_handler: null, plays_everything: true, hevc_extension: false, av1_extension: true },
+        codec: "h264",
+        gpu_encoder: true,
+        issues: laptop
+          ? [
+              { severity: "warning", title: "No video player installed", detail: "Your clips can be watched inside VINCI, but nothing on this PC opens .mp4 files. Install VLC (or mpv, Haruna, Celluloid…).", fix: "sudo pacman -S --needed vlc vlc-plugins-all", link: "https://www.videolan.org/vlc/" },
+              { severity: "info", title: "Intel UHD Graphics — optional driver", detail: "The VA-API video driver for this Intel GPU is not installed, so it cannot encode video. (Not needed: another GPU already encodes.)", fix: "sudo pacman -S --needed intel-media-driver", link: null },
+            ]
+          : [],
+      });
+    }
+    case "open_link":
+      window.open(String(args.url), "_blank", "noopener");
+      return r(undefined);
     case "get_stats":
       return r({ app_cpu_percent: 0.6 + Math.random() * 0.4, app_ram_bytes: 58e6 + Math.random() * 3e6, sys_cpu_percent: 31 + Math.random() * 8, sys_ram_used_bytes: 14.2e9, sys_ram_total_bytes: 32e9, gpus: [{ name: "NVIDIA GeForce RTX 4070", util_percent: 71 + Math.random() * 6, encoder_percent: 9 + Math.random() * 3, vram_used_bytes: 7.1e9, vram_total_bytes: 12e9 }] });
     case "list_clips": {
       const q = (args.query ?? {}) as { search?: string; game?: string; favorites_only?: boolean; sort?: string; limit?: number };
-      if (scenario === "first-run") return r([]);
+      if (scenario === "first-run" || scenario === "arch-laptop") return r([]);
       let out = clips.filter((c) => (!q.search || (c.title + (c.game ?? "")).toLowerCase().includes(q.search.toLowerCase())) && (!q.game || c.game === q.game) && (!q.favorites_only || c.favorite));
       const sorters: Record<string, (a: Clip, b: Clip) => number> = { newest: (a, b) => b.created_at - a.created_at, oldest: (a, b) => a.created_at - b.created_at, largest: (a, b) => b.size - a.size, smallest: (a, b) => a.size - b.size, longest: (a, b) => b.duration - a.duration, shortest: (a, b) => a.duration - b.duration, name: (a, b) => a.title.localeCompare(b.title) };
       out = [...out].sort(sorters[q.sort ?? "newest"]);

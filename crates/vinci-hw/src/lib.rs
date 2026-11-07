@@ -13,6 +13,7 @@
 //! executed, and hardware encoders are validated with a real test encode in
 //! `vinci-encoding`.
 
+pub mod drivers;
 pub mod ffmpeg;
 pub mod gpu;
 pub mod gstreamer;

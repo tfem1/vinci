@@ -283,3 +283,39 @@ export type EngineEvent =
   | { type: "hotkey_pressed"; action: { type: "save_clip"; secs: number | null } | { type: "toggle_replay" } };
 
 export type OverlayMessage = { kind: "saved"; title: string; seconds: number } | { kind: "error"; title: string } | { kind: "info"; title: string } | { kind: "indicator"; active: boolean };
+
+export interface DriverCheck {
+  gpu: string;
+  vendor: "nvidia" | "amd" | "intel" | "other";
+  driver: string;
+  encoder_api: string;
+  encoder_ok: boolean;
+  problem: string | null;
+  fix: string | null;
+  link: string | null;
+  optional: boolean;
+}
+
+export interface PlayerCheck {
+  players: string[];
+  default_handler: string | null;
+  plays_everything: boolean;
+  hevc_extension: boolean | null;
+  av1_extension: boolean | null;
+}
+
+export interface Issue {
+  severity: "warning" | "info";
+  title: string;
+  detail: string;
+  fix: string | null;
+  link: string | null;
+}
+
+export interface SystemCheck {
+  drivers: DriverCheck[];
+  players: PlayerCheck;
+  codec: Codec;
+  gpu_encoder: boolean;
+  issues: Issue[];
+}

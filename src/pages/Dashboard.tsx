@@ -1,11 +1,11 @@
-import { AlertTriangle, ArrowRight, ChevronRight, Copy, FolderOpen, Gamepad2, Gauge, Keyboard, Loader2, MonitorPlay, Pause, Play, RotateCw, Scissors } from "lucide-react";
+import { AlertTriangle, ArrowRight, Check, ChevronRight, Copy, Cpu, ExternalLink, FolderOpen, Gamepad2, Gauge, Info, Keyboard, Loader2, MonitorPlay, Pause, Play, RotateCw, Scissors } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ClipCard } from "../components/ClipCard";
 import { Kbd } from "../components/ui";
 import { useEngine, useStats } from "../hooks/engine";
 import { api, errorText } from "../lib/api";
 import { codecLabel, encoderLabel, formatBytes, formatDuration, formatPercent, formatSpan, resolutionLabel } from "../lib/format";
-import type { Clip } from "../lib/types";
+import type { Clip, Issue, SystemCheck } from "../lib/types";
 import type { Page } from "../components/Sidebar";
 
 const PRESETS = [30, 60, 120, 180, 300];
@@ -16,10 +16,17 @@ export function Dashboard({ onOpen, onPage }: { onOpen: (c: Clip) => void; onPag
   const stats = useStats(settings?.performance.stats_interval_ms ?? 2000);
   const [recent, setRecent] = useState<Clip[]>([]);
   const [busy, setBusy] = useState(false);
+  const [check, setCheck] = useState<SystemCheck | null>(null);
 
   useEffect(() => {
     api.listClips({ sort: "newest", limit: 4 }).then(setRecent).catch(() => {});
   }, [libraryVersion]);
+
+  // Drivers, GPU encoder and video players; re-checked when the codec changes.
+  const codecSetting = settings?.encoding.codec;
+  useEffect(() => {
+    api.systemCheck().then(setCheck).catch(() => {});
+  }, [codecSetting]);
 
   const state = status?.state ?? "stopped";
   const running = state === "running";
@@ -161,6 +168,8 @@ export function Dashboard({ onOpen, onPage }: { onOpen: (c: Clip) => void; onPag
         </div>
       )}
 
+      {check && check.issues.length > 0 && <SystemIssues issues={check.issues} toast={toast} />}
+
       {!recent.length && (
         <div className="steps">
           <Step n={1} icon={<Gamepad2 size={16} />} title="Play normally">
@@ -241,6 +250,32 @@ export function Dashboard({ onOpen, onPage }: { onOpen: (c: Clip) => void; onPag
             </dl>
           </div>
 
+          {check && (
+            <div className="card pad drivers">
+              <div className="card-title">
+                <span className="icon">
+                  <Cpu size={14} /> Drivers &amp; players
+                </span>
+              </div>
+              <ul className="driver-list">
+                {check.drivers.map((d) => (
+                  <li key={d.gpu}>
+                    {d.encoder_ok ? <Check size={13} className="ok" /> : d.problem && !d.optional ? <AlertTriangle size={13} className="bad" /> : <Info size={13} className="faint" />}
+                    <b>{d.gpu}</b>
+                    <span className="muted">{d.driver}</span>
+                    <span className="faint">{d.encoder_api}{d.encoder_ok ? " ✓" : d.optional ? " (not used)" : ""}</span>
+                  </li>
+                ))}
+                {check.drivers.length === 0 && <li className="muted">No graphics card detected — encoding on the processor.</li>}
+                <li>
+                  {check.players.plays_everything ? <Check size={13} className="ok" /> : <Info size={13} className="faint" />}
+                  <b>Video players</b>
+                  <span className="muted">{check.players.players.length ? check.players.players.join(", ") : "none found"}</span>
+                </li>
+              </ul>
+            </div>
+          )}
+
           <div className="card pad">
             <div className="card-title">
               <span className="icon">
@@ -261,6 +296,46 @@ export function Dashboard({ onOpen, onPage }: { onOpen: (c: Clip) => void; onPag
         </div>
       </details>
     </div>
+  );
+}
+
+function SystemIssues({ issues, toast }: { issues: Issue[]; toast: (t: { kind: "ok" | "error" | "info"; title: string; detail?: string }) => void }) {
+  const warnings = issues.filter((i) => i.severity === "warning");
+  const infos = issues.filter((i) => i.severity === "info");
+  return (
+    <details className="card issues" open={warnings.length > 0}>
+      <summary>
+        <ChevronRight size={14} className="chev" />
+        {warnings.length ? <AlertTriangle size={14} className="bad" /> : <Info size={14} />}
+        {warnings.length ? `${warnings.length} thing${warnings.length > 1 ? "s" : ""} to fix` : `${infos.length} tip${infos.length > 1 ? "s" : ""}`}
+        {warnings.length > 0 && infos.length > 0 && <span className="faint"> · {infos.length} tip{infos.length > 1 ? "s" : ""}</span>}
+      </summary>
+      <div className="issue-list">
+        {[...warnings, ...infos].map((i) => (
+          <div key={i.title} className={`issue ${i.severity}`}>
+            <b>{i.title}</b>
+            <span>{i.detail}</span>
+            {(i.fix || i.link) && (
+              <div className="issue-actions">
+                {i.fix && (
+                  <div className="fix-cmd plain">
+                    <code>{i.fix}</code>
+                    <button className="btn sm" onClick={() => copyText(i.fix!, toast)}>
+                      <Copy size={13} /> Copy
+                    </button>
+                  </div>
+                )}
+                {i.link && (
+                  <button className="btn sm ghost" onClick={() => api.openLink(i.link!).catch(() => {})}>
+                    <ExternalLink size={13} /> Download page
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </details>
   );
 }
 

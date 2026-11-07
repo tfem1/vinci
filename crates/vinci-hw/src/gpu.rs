@@ -48,6 +48,25 @@ pub struct GpuInfo {
     pub driver: Option<String>,
     /// DRM render node (`/dev/dri/renderD128`) used for VAAPI — Linux only.
     pub render_node: Option<PathBuf>,
+    /// Driver version: `580.95.05` (NVIDIA on Linux), or the Windows driver version
+    /// (`32.0.15.6094`, shown with the NVIDIA release `560.94` when it is one).
+    #[serde(default)]
+    pub driver_version: Option<String>,
+}
+
+/// NVIDIA's release number hidden in a Windows driver version:
+/// `32.0.15.6094` → `560.94` (last five digits of the last two fields).
+pub fn nvidia_release_from_windows(version: &str) -> Option<String> {
+    let parts: Vec<&str> = version.split('.').collect();
+    if parts.len() != 4 {
+        return None;
+    }
+    let digits = format!("{}{:0>4}", parts[2], parts[3]);
+    if digits.len() < 5 || !digits.chars().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    let last5 = &digits[digits.len() - 5..];
+    Some(format!("{}.{}", &last5[..3], &last5[3..]))
 }
 
 pub fn list_gpus() -> Vec<GpuInfo> {
@@ -110,7 +129,11 @@ mod linux {
             let name = nvidia_model(pci.as_deref())
                 .or_else(|| pci_ids_name(vendor_id, device_id))
                 .unwrap_or_else(|| format!("{} GPU ({:04x})", vendor.label(), device_id));
-            out.push(GpuInfo { index, vendor, vendor_id, device_id, name, vram_bytes, driver, render_node });
+            let driver_version = match driver.as_deref() {
+                Some("nvidia") => fs::read_to_string("/sys/module/nvidia/version").ok().map(|v| v.trim().to_string()),
+                _ => None,
+            };
+            out.push(GpuInfo { index, vendor, vendor_id, device_id, name, vram_bytes, driver, render_node, driver_version });
         }
         out
     }
@@ -198,7 +221,8 @@ mod linux {
 #[cfg(windows)]
 mod windows_impl {
     use super::*;
-    use windows::Win32::Graphics::Dxgi::{CreateDXGIFactory1, IDXGIFactory1, DXGI_ADAPTER_FLAG_SOFTWARE};
+    use windows::core::Interface;
+    use windows::Win32::Graphics::Dxgi::{CreateDXGIFactory1, IDXGIDevice, IDXGIFactory1, DXGI_ADAPTER_FLAG_SOFTWARE};
 
     pub fn list() -> Vec<GpuInfo> {
         let mut out = Vec::new();
@@ -211,6 +235,11 @@ mod windows_impl {
                     if !software {
                         let len = desc.Description.iter().position(|&c| c == 0).unwrap_or(desc.Description.len());
                         let name = String::from_utf16_lossy(&desc.Description[..len]).trim().to_string();
+                        // User-mode driver version, e.g. 32.0.15.6094.
+                        let driver_version = adapter.CheckInterfaceSupport(&IDXGIDevice::IID).ok().map(|v| {
+                            let v = v as u64;
+                            format!("{}.{}.{}.{}", v >> 48, (v >> 32) & 0xffff, (v >> 16) & 0xffff, v & 0xffff)
+                        });
                         out.push(GpuInfo {
                             index: i,
                             vendor: GpuVendor::from_pci_id(desc.VendorId),
@@ -220,6 +249,7 @@ mod windows_impl {
                             vram_bytes: Some(desc.DedicatedVideoMemory as u64),
                             driver: None,
                             render_node: None,
+                            driver_version,
                         });
                     }
                 }

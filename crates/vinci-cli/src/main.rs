@@ -176,6 +176,40 @@ fn run(engine: &Engine, cmd: Cmd) -> i32 {
                     }
                 }
             }
+            let sc = engine.system_check();
+            println!("\nDrivers:");
+            for d in &sc.drivers {
+                let state = if d.encoder_ok {
+                    "✔"
+                } else if d.optional || d.problem.is_none() {
+                    "·"
+                } else {
+                    "✘"
+                };
+                println!(
+                    "  {state} {:<34} {:<40} {}",
+                    d.gpu,
+                    d.driver,
+                    if d.encoder_ok { format!("{} OK", d.encoder_api) } else { d.encoder_api.to_string() }
+                );
+            }
+            println!("Players: {}", if sc.players.players.is_empty() { "none found".to_string() } else { sc.players.players.join(", ") });
+            if !sc.issues.is_empty() {
+                println!("\nTo fix:");
+                for i in &sc.issues {
+                    let tag = match i.severity {
+                        vinci_engine::syscheck::Severity::Warning => "!",
+                        vinci_engine::syscheck::Severity::Info => "i",
+                    };
+                    println!("  [{tag}] {} — {}", i.title, i.detail);
+                    if let Some(f) = &i.fix {
+                        println!("      fix:  {f}");
+                    }
+                    if let Some(l) = &i.link {
+                        println!("      link: {l}");
+                    }
+                }
+            }
             println!("\nEncoders (validated with a real test encode):");
             for p in &hw.probes {
                 let label = vinci_encoding::catalog::find(&p.id).map(|e| e.label).unwrap_or("");

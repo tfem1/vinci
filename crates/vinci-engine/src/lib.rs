@@ -15,6 +15,7 @@ pub mod events;
 pub mod hwstate;
 pub mod logging;
 pub mod settings;
+pub mod syscheck;
 
 pub use events::{EngineEvent, EngineStatus, ReplayState};
 pub use hwstate::HwState;
@@ -354,6 +355,20 @@ impl Engine {
     // ---------------------------------------------------------------- hardware
 
     /// Hardware report + validated encoders (cached; `force` re-probes everything).
+    /// Drivers, GPU encoder, video players and codec compatibility, with fixes.
+    pub fn system_check(&self) -> syscheck::SystemCheck {
+        let hw = self.hardware(false);
+        let probes: Vec<vinci_hw::drivers::ProbeOutcome> =
+            hw.probes.iter().map(|p| vinci_hw::drivers::ProbeOutcome { id: p.id.clone(), ok: p.ok, error: p.error.clone() }).collect();
+        let drivers = vinci_hw::drivers::check(&hw.report.gpus, &probes);
+        let players = vinci_hw::drivers::players();
+        let s = self.settings();
+        let codec = s.encoding.codec.resolve(s.effective_profile());
+        let gpu_encoder = hw.probes.iter().any(|p| p.ok && p.family != vinci_encoding::EncoderFamily::Software);
+        let issues = syscheck::issues(&drivers, &players, codec, gpu_encoder, cfg!(windows), vinci_hw::system::distro_family());
+        syscheck::SystemCheck { drivers, players, codec, gpu_encoder, issues }
+    }
+
     pub fn hardware(&self, force: bool) -> Arc<HwState> {
         if !force {
             if let Some(h) = self.0.hw.read().clone() {

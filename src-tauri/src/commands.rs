@@ -280,3 +280,18 @@ pub async fn pick_folder(app: AppHandle, title: String) -> CmdResult<Option<Stri
 pub fn media_url(state: State<AppState>, id: i64) -> Option<String> {
     state.media.as_ref().map(|m| m.clip_url(id))
 }
+
+#[tauri::command]
+pub async fn system_check(app: AppHandle) -> CmdResult<vinci_engine::syscheck::SystemCheck> {
+    let engine = app.state::<AppState>().engine.clone();
+    blocking(move || Ok(engine.system_check())).await
+}
+
+/// Open a driver / player download page from the system check (https only).
+#[tauri::command]
+pub fn open_link(app: AppHandle, url: String) -> CmdResult<()> {
+    if !url.starts_with("https://") {
+        return Err("only https links can be opened".into());
+    }
+    app.opener().open_url(url, None::<&str>).map_err(e)
+}
