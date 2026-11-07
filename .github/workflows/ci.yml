@@ -58,6 +58,10 @@ jobs:
         run: scripts/test-wayland-pipeline.sh
       - name: Installer lint
         run: shellcheck -S warning installers/linux/install.sh scripts/*.sh
+      - name: File names valid on Windows
+        run: |
+          bad="$(git ls-files | grep -E '[<>:"|?*\\]' || true)"
+          if [ -n "$bad" ]; then echo "File names Windows cannot check out:"; echo "$bad"; exit 1; fi
 
   windows:
     name: Windows (engine tests, app build check, installer lint)
